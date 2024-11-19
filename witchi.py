@@ -2,7 +2,7 @@ import argparse
 from alignment_pruner.alignment_pruner import AlignmentPruner
 from alignment_pruner.permutation_test import PermutationTest
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description='Recursively prune alignment based on chi-square test.')
     subparsers = parser.add_subparsers(dest='command', required=True)
 
@@ -36,3 +36,6 @@ if __name__ == '__main__':
     elif args.command == 'test':
         tester = PermutationTest(num_workers=args.num_workers, permutations=args.permutations)
         tester.run_test(alignment_file=args.file, alignment_format=args.format)
+
+if __name__ == '__main__':
+    main()
