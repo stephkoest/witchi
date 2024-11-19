@@ -1,0 +1,13 @@
+name: witchi-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - numpy
+  - scipy
+  - biopython
+  - joblib
+  - pip
+  - pip:
+      - witchi  # This will install the local package once set up.
