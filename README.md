@@ -34,7 +34,7 @@ pip install -e .
 Prune alignment columns recursively based on Chi-square test:
 
 ```bash
-python witchi.py prune --file alignment.fasta --format fasta --max_residue_pruned 100 --permutations 500 --num_workers 4 --top_n 3 --pruning_algorithm wasserstein
+witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --permutations 500 --num_workers 4 --top_n 3 --pruning_algorithm wasserstein
 ```
 
 #### Options:
@@ -50,7 +50,7 @@ python witchi.py prune --file alignment.fasta --format fasta --max_residue_prune
 Run permutation tests to establish empirical Chi-square distributions:
 
 ```bash
-python witchi.py test --file alignment.fasta --format fasta --num_workers 4 --permutations 100
+witchi test --file alignment.fasta --format fasta --num_workers 4 --permutations 100
 ```
 
 #### Options:
@@ -84,11 +84,11 @@ python witchi.py test --file alignment.fasta --format fasta --num_workers 4 --pe
 ## Example Workflow
 1. Run permutation test:
 ```bash
-python witchi.py test --file example.fasta --permutations 100
+witchi test --file example.fasta --permutations 100
 ```
 2. Prune alignment with Wasserstein distance guidance:
 ```bash
-python witchi.py prune --file example.fasta --max_residue_pruned 50 --pruning_algorithm wasserstein
+witchi prune --file example.fasta --max_residue_pruned 50 --pruning_algorithm wasserstein
 ```
 
 ## Future Features
