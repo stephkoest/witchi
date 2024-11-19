@@ -15,8 +15,9 @@ WitChi is a sophisticated alignment pruning tool designed to reduce compositiona
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/username/bewitchi.git
-cd bewitchi
+git clone https://github.com/username/witchi.git
+cd witchi
+# to be done
 pip install -r requirements.txt
 ```
 
@@ -85,9 +86,9 @@ python witchi.py prune --file example.fasta --max_residue_pruned 50 --pruning_al
 Real-Time Visualization: Live plotting of distribution shifts during pruning.
 
 ## License
-Bewitchi is licensed under the MIT License.
+witchi is licensed under the MIT License.
 
-Contributing
+## Contributing
 We welcome contributions! Please fork the repository, create a branch, and submit a pull request.
 
-Acknowledgments
+## Acknowledgments
