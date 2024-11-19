@@ -1,6 +1,6 @@
 import argparse
-from alignment_pruner.alignment_pruner import AlignmentPruner
-from alignment_pruner.permutation_test import PermutationTest
+from witchi.alignment_pruner.alignment_pruner import AlignmentPruner
+from witchi.alignment_pruner.permutation_test import PermutationTest
 
 def main():
     parser = argparse.ArgumentParser(description='Recursively prune alignment based on chi-square test.')
