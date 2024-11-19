@@ -1,7 +1,7 @@
 # WitChi: A Compositional Bias Pruning Tool for Multiple Sequence Alignments
 WitChi is a sophisticated alignment pruning tool designed to reduce compositional bias in multiple sequence alignments (MSAs). It utilizes statistical methods, permutation tests, and parallel processing to iteratively prune alignment columns, optimizing for unbiased taxonomic composition.
-![Logo_v2](https://github.com/user-attachments/assets/2af4f0ff-cbbe-48be-a50f-b45de3061b40)
 
+![Logo_v2](https://github.com/user-attachments/assets/2af4f0ff-cbbe-48be-a50f-b45de3061b40)
 
 ## Key Features
 * **Recursive Chi-Square Pruning**: Iteratively removes biased columns based on Chi-square statistics.
@@ -13,7 +13,6 @@ WitChi is a sophisticated alignment pruning tool designed to reduce compositiona
 
 ## Installation
 Clone the repository and install dependencies:
-
 ```bash
 git clone https://github.com/username/witchi.git
 cd witchi
@@ -28,6 +27,7 @@ Prune alignment columns recursively based on Chi-square test:
 ```bash
 python witchi.py prune --file alignment.fasta --format fasta --max_residue_pruned 100 --permutations 500 --num_workers 4 --top_n 3 --pruning_algorithm wasserstein
 ```
+
 #### Options:
 - `--file`: Path to the alignment file.
 - `--format`: Alignment file format (default: fasta).
