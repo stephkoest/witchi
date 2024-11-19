@@ -12,12 +12,21 @@ WitChi is a sophisticated alignment pruning tool designed to reduce compositiona
 * **Flexible Configuration**: Adjustable parameters such as pruning depth, top N columns to prune, and permutation count.
 
 ## Installation
-Clone the repository and install dependencies:
+**1. Clone the repository:**
 ```bash
 git clone https://github.com/username/witchi.git
 cd witchi
-# to be done
-pip install -r requirements.txt
+```
+
+**2. Create the Conda Environment:**
+
+```bash
+conda env create -f environment.yml
+conda activate witchi-env
+```
+**3. Install locally:**
+```bash
+pip install -e .
 ```
 
 ## Usage
