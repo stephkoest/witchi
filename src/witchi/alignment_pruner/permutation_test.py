@@ -37,6 +37,7 @@ class PermutationTest:
         return means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2
 
     def run_test(self, alignment_file, alignment_format):
+        """Run the permutation test on an alignment."""
         from .alignment_reader import AlignmentReader
         from .sequence_type_detector import SequenceTypeDetector
         from .chi_square_calculator import ChiSquareCalculator
@@ -65,6 +66,7 @@ class PermutationTest:
         sorted_row_chi2 = dict(sorted(row_chi2_dict.items(), key=lambda item: item[1], reverse=True))
 
         print(f"Significant rows permutation: {significant_count_permutation} of {np.shape(per_row_chi2)[0]} Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
+        print(f"Permutations mean chi2score: {(mean_perm_chi2):.2f} Alignment mean chi2score: {(np.mean(per_row_chi2)):.2f} ")
         #print("Row Chi-Squared Scores:", sorted_row_chi2)
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
