@@ -14,7 +14,7 @@ WitChi is a sophisticated alignment pruning tool designed to reduce compositiona
 ## Installation
 **1. Clone the repository:**
 ```bash
-git clone https://github.com/username/witchi.git
+git clone https://github.com/stephkoest/witchi.git
 cd witchi
 ```
 
