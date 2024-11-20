@@ -96,6 +96,9 @@ Real-Time Visualization: Live plotting of distribution shifts during pruning.
 ## License
 witchi is licensed under the MIT License.
 
+## Publication
+Preprint coming soon...
+
 ## Contributing
 We welcome contributions! Please fork the repository, create a branch, and submit a pull request.
 
