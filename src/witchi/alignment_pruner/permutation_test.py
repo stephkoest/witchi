@@ -9,6 +9,14 @@ class PermutationTest:
         self.num_workers = num_workers
         self.permutations = permutations
 
+    def calc_pseudo_pvalue(self, per_row_chi2, permutated_per_row_chi2):
+        """Calculate pseudo p-value."""
+        pseudo_p_list = []
+        for i in range(len(per_row_chi2)):
+            pseudo_p = (np.sum(permutated_per_row_chi2 >= per_row_chi2[i]) / len(permutated_per_row_chi2)) * len(per_row_chi2)
+            pseudo_p_list.append(pseudo_p)
+        return pseudo_p_list
+
     def run(self, alignment_array, chi_square_calculator):
         """Run the permutation test and get chi-squared score percentiles and distribution."""
         def permute_single_calculate_chi2(i):
@@ -61,13 +69,13 @@ class PermutationTest:
 
         # Extract row names
         row_names = [record.id for record in alignment]
-        row_chi2_dict = {row_names[i]: per_row_chi2[i] for i in range(len(row_names))}
         # Sort the dictionary by chi-squared scores in descending order
-        sorted_row_chi2 = dict(sorted(row_chi2_dict.items(), key=lambda item: item[1], reverse=True))
-
+        #sorted_row_chi2 = dict(sorted(row_chi2_dict.items(), key=lambda item: item[1], reverse=True))
+        pseudo_pvalues = self.calc_pseudo_pvalue(per_row_chi2, permutated_per_row_chi2)
         print(f"Significant rows permutation: {significant_count_permutation} of {np.shape(per_row_chi2)[0]} Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
         print(f"Permutations mean chi2score: {(mean_perm_chi2):.2f} Alignment mean chi2score: {(np.mean(per_row_chi2)):.2f} ")
-        #print("Row Chi-Squared Scores:", sorted_row_chi2)
+        row_pseudo_pvalue_dict = {row_names[i]: pseudo_pvalues[i] for i in range(len(row_names))}
+        print(f"Row Chi-Squared Scores: {row_pseudo_pvalue_dict}")
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
     def write_score_dict_to_json(self, dictionary, file_name):
