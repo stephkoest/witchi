@@ -78,7 +78,7 @@ class PermutationTest:
         row_pseudo_pvalue_dict = {row_names[i]: pseudo_pvalues[i] for i in range(len(row_names))}
         significant_list = [" ".join([str(t), str(row_pseudo_pvalue_dict[t])]) for t in row_pseudo_pvalue_dict.keys() if row_pseudo_pvalue_dict[t] < 0.05]
         significant_string = ", ".join(significant_list)
-        print(f"Taxa with corrected pseudo-p-values below 0.05: {significant_string}")
+        print(f"Biased Taxa based on corrected pseudo-p-values: {len(significant_list)}")
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
     def write_score_dict_to_json(self, dictionary, file_name):
