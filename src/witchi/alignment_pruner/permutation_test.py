@@ -14,7 +14,7 @@ class PermutationTest:
         pseudo_p_list = []
         for i in range(len(per_row_chi2)):
             #divide number of permutated_per_row_chi2 larger than per_row_chi2[i] by the number of taxa in permutations to get the probability of the chi2 score
-            pseudo_p = (np.sum(permutated_per_row_chi2 >= per_row_chi2[i]) / len(permutated_per_row_chi2)) #* len(per_row_chi2)
+            pseudo_p = (np.sum(permutated_per_row_chi2 >= per_row_chi2[i]) / len(permutated_per_row_chi2)) * len(per_row_chi2)
             pseudo_p_list.append(pseudo_p)
         return pseudo_p_list
 
@@ -76,7 +76,7 @@ class PermutationTest:
         print(f"Significant rows permutation: {significant_count_permutation} of {np.shape(per_row_chi2)[0]} Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
         print(f"Permutations mean chi2score: {(mean_perm_chi2):.2f} Alignment mean chi2score: {(np.mean(per_row_chi2)):.2f} ")
         row_pseudo_pvalue_dict = {row_names[i]: pseudo_pvalues[i] for i in range(len(row_names))}
-        print(f"Row Chi-Squared Scores: {pseudo_pvalues}")
+        print(f"Taxa with corrected pseudo-p-values below 0.05: {[(t,row_pseudo_pvalue_dict[t]) for t in row_pseudo_pvalue_dict.keys() if row_pseudo_pvalue_dict[t] < 0.05]}")
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
     def write_score_dict_to_json(self, dictionary, file_name):
