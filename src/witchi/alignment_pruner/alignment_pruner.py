@@ -123,6 +123,11 @@ class AlignmentPruner:
                 if self.pruning_algorithm == 'wasserstein':
                     if self.top_n > 5:
                         self.top_n = 5
+            if per_row_chi2_median <= mean_perm_chi2:
+                if self.pruning_algorithm == 'global':
+                    print(f"Pruning complete. Exiting.")
+                    self.top_n = initial_topn
+                    break
             if upper_chi_quantile <= upper_threshold:
                 print(f"Pruning complete. Exiting.")
                 self.top_n = initial_topn
