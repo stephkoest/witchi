@@ -50,6 +50,8 @@ class PermutationTest:
         from .alignment_reader import AlignmentReader
         from .sequence_type_detector import SequenceTypeDetector
         from .chi_square_calculator import ChiSquareCalculator
+        import time
+        start_time = time.time()
         reader = AlignmentReader(alignment_file, alignment_format)
         alignment, alignment_array = reader.run()
         detector = SequenceTypeDetector()
@@ -79,6 +81,9 @@ class PermutationTest:
         significant_list = [" ".join([str(t), str(row_pseudo_pvalue_dict[t])]) for t in row_pseudo_pvalue_dict.keys() if row_pseudo_pvalue_dict[t] < 0.05]
         significant_string = ", ".join(significant_list)
         print(f"Biased Taxa based on corrected pseudo-p-values: {len(significant_list)} of {np.shape(per_row_chi2)[0]}")
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"Execution time for testing: {elapsed_time:.2f} seconds")
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
     def write_score_dict_to_json(self, dictionary, file_name):
