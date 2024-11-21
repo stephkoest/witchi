@@ -13,7 +13,8 @@ class PermutationTest:
         """Calculate pseudo p-value."""
         pseudo_p_list = []
         for i in range(len(per_row_chi2)):
-            pseudo_p = (np.sum(permutated_per_row_chi2 >= per_row_chi2[i]) / len(permutated_per_row_chi2)) * len(per_row_chi2)
+            #divide lenght of permutated_per_row_chi2 larger than per_row_chi2[i] by the number of taxa in permutations to get the probability of the chi2 score
+            pseudo_p = (len(permutated_per_row_chi2 >= per_row_chi2[i]) / len(permutated_per_row_chi2)) * len(per_row_chi2)
             pseudo_p_list.append(pseudo_p)
         return pseudo_p_list
 
