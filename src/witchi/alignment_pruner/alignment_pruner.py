@@ -117,7 +117,7 @@ class AlignmentPruner:
                 score_dict["before_real"] = per_row_chi2
 
             pseudo_pvalues = self.permutation_test.calc_pseudo_pvalue(per_row_chi2, permutated_per_row_chi2)
-            significant_count = len(pseudo_pvalues >= 0.05)
+            significant_count = sum(p >= 0.05 for p in pseudo_pvalues)
 
             if per_row_chi2_median <= upper_box_threshold:
                 if self.pruning_algorithm == 'wasserstein':
