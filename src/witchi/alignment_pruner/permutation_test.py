@@ -76,7 +76,7 @@ class PermutationTest:
         print(f"Significant rows permutation: {significant_count_permutation} of {np.shape(per_row_chi2)[0]} Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
         print(f"Permutations mean chi2score: {(mean_perm_chi2):.2f} Alignment mean chi2score: {(np.mean(per_row_chi2)):.2f} ")
         row_pseudo_pvalue_dict = {row_names[i]: pseudo_pvalues[i] for i in range(len(row_names))}
-        print(f"Taxa with corrected pseudo-p-values below 0.05: {[(t,row_pseudo_pvalue_dict[t]) for t in row_pseudo_pvalue_dict.keys() if row_pseudo_pvalue_dict[t] < 0.05]}")
+        print(f"Taxa with corrected pseudo-p-values below 0.05: {[[t,row_pseudo_pvalue_dict[t]].join(" ") for t in row_pseudo_pvalue_dict.keys() if row_pseudo_pvalue_dict[t] < 0.05].join(", ")}")
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
     def write_score_dict_to_json(self, dictionary, file_name):
