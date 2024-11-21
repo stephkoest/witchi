@@ -108,6 +108,7 @@ class AlignmentPruner:
             expected_observed = self.chi_square_calculator.calculate_expected_observed(count_rows_array)
             per_row_chi2 = self.chi_square_calculator.calculate_row_chi2(expected_observed, count_rows_array)
             per_row_chi2_median = np.median(per_row_chi2)
+            per_row_chi2_mean = np.mean(per_row_chi2)
             upper_chi_quantile = np.percentile(per_row_chi2, 95)
             global_chi2 = np.sum(per_row_chi2)
 
@@ -123,7 +124,7 @@ class AlignmentPruner:
                 if self.pruning_algorithm == 'wasserstein':
                     if self.top_n > 5:
                         self.top_n = 5
-            if per_row_chi2_median <= mean_perm_chi2:
+            if per_row_chi2_mean <= mean_perm_chi2:
                 if self.pruning_algorithm == 'global':
                     print(f"Pruning complete. Exiting.")
                     self.top_n = initial_topn
