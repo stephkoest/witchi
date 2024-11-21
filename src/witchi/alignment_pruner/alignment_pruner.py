@@ -39,11 +39,11 @@ class AlignmentPruner:
 
         self.significance_level = self.dna_significance_level if self.is_dna else self.aa_significance_level
         self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
-        permutation_test = PermutationTest(self.num_workers, self.permutations)
-        means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = permutation_test.run(alignment_array, self.chi_square_calculator)
+        self.permutation_test = PermutationTest(self.num_workers, self.permutations)
+        means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = self.permutation_test.run(alignment_array, self.chi_square_calculator)
         median_perm_chi2 = np.median(permutated_per_row_chi2)
         mad_perm_chi2 = np.median(np.abs(permutated_per_row_chi2 - median_perm_chi2))
-        pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(alignment_array, self.chi_square_calculator, means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2, median_perm_chi2, mad_perm_chi2)
+        pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(alignment_array, means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2, median_perm_chi2, mad_perm_chi2)
 
         pruned_sequences = self.update_sequences(alignment, pruned_alignment_array)
         pruned_alignment = MultipleSeqAlignment(pruned_sequences)
@@ -55,7 +55,7 @@ class AlignmentPruner:
         self.write_pruned_dict_to_tsv(prune_dict, output_tsv_file)
 
         output_json_file = os.path.splitext(self.file)[0] + suffix.replace('.fasta', '_score_dict.json')
-        permutation_test.write_score_dict_to_json(score_dict, output_json_file)
+        self.permutation_test.write_score_dict_to_json(score_dict, output_json_file)
         print(f"Pruned {len(prune_dict.keys())} columns.")
         print(f"Pruned alignment saved to {output_alignment_pruned_file}")
         print(f"Columns pruned in order saved to: {output_tsv_file}")
@@ -89,7 +89,7 @@ class AlignmentPruner:
 
         return initial_global_chi2, chi2_differences
 
-    def recursive_prune(self, alignment_array, chi_square_calculator, means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2, median_perm_chi2, mad_perm_chi2):
+    def recursive_prune(self, alignment_array, means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2, median_perm_chi2, mad_perm_chi2):
         """Recursively prune the alignment array."""
         prune_dict = {}
         score_dict = {}
@@ -104,9 +104,9 @@ class AlignmentPruner:
 
 
         while removed_columns_count < self.max_residue_pruned:
-            count_rows_array = chi_square_calculator.calculate_row_counts(alignment_array)
-            expected_observed = chi_square_calculator.calculate_expected_observed(count_rows_array)
-            per_row_chi2 = chi_square_calculator.calculate_row_chi2(expected_observed, count_rows_array)
+            count_rows_array = self.chi_square_calculator.calculate_row_counts(alignment_array)
+            expected_observed = self.chi_square_calculator.calculate_expected_observed(count_rows_array)
+            per_row_chi2 = self.chi_square_calculator.calculate_row_chi2(expected_observed, count_rows_array)
             per_row_chi2_median = np.median(per_row_chi2)
             upper_chi_quantile = np.percentile(per_row_chi2, 95)
             global_chi2 = np.sum(per_row_chi2)
@@ -116,7 +116,7 @@ class AlignmentPruner:
                 score_dict["before_permuted"] = permutated_per_row_chi2
                 score_dict["before_real"] = per_row_chi2
 
-            pseudo_pvalues = chi_square_calculator.calc_pseudo_pvalue(per_row_chi2, permutated_per_row_chi2)
+            pseudo_pvalues = self.permutation_test.calc_pseudo_pvalue(per_row_chi2, permutated_per_row_chi2)
             significant_count = len(pseudo_pvalues >= 0.05)
 
             if per_row_chi2_median <= upper_box_threshold:
@@ -142,7 +142,7 @@ class AlignmentPruner:
                 removed_columns_count += 1
 
             alignment_array = np.delete(alignment_array, top_n_indices, axis=1)
-            count_rows_array = chi_square_calculator.calculate_row_counts(alignment_array)
+            count_rows_array = self.chi_square_calculator.calculate_row_counts(alignment_array)
             original_indices = [i for j, i in enumerate(original_indices) if j not in top_n_indices]
             iteration += 1
             print(f"Columns removed: {removed_columns_count}, {(removed_columns_count / alignment_size) * 100:.2f}% | Biased taxa permutation: {significant_count} | Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
