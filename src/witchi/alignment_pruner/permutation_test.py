@@ -73,12 +73,12 @@ class PermutationTest:
         # Sort the dictionary by chi-squared scores in descending order
         #sorted_row_chi2 = dict(sorted(row_chi2_dict.items(), key=lambda item: item[1], reverse=True))
         pseudo_pvalues = self.calc_pseudo_pvalue(per_row_chi2, permutated_per_row_chi2)
-        print(f"Significant rows permutation: {significant_count_permutation} of {np.shape(per_row_chi2)[0]} Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
+        print(f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
         print(f"Permutations mean chi2score: {(mean_perm_chi2):.2f} Alignment mean chi2score: {(np.mean(per_row_chi2)):.2f} ")
         row_pseudo_pvalue_dict = {row_names[i]: pseudo_pvalues[i] for i in range(len(row_names))}
         significant_list = [" ".join([str(t), str(row_pseudo_pvalue_dict[t])]) for t in row_pseudo_pvalue_dict.keys() if row_pseudo_pvalue_dict[t] < 0.05]
         significant_string = ", ".join(significant_list)
-        print(f"Biased Taxa based on corrected pseudo-p-values: {len(significant_list)}")
+        print(f"Biased Taxa based on corrected pseudo-p-values: {len(significant_list)} of {np.shape(per_row_chi2)[0]}")
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
     def write_score_dict_to_json(self, dictionary, file_name):
