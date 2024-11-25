@@ -29,6 +29,13 @@ conda activate witchi-env
 pip install -e .
 ```
 
+**4. Running Tests:**
+As an example we use the compositionally biased 5 taxon dataset from Foster et al. 2022 (PMID: 36083446). The dataset is available in the `tests` directory.
+Run the tests using unittest:
+```bash
+python -m unittest discover -s tests -p 'test_witchi.py'
+```
+
 ## Usage
 ### Pruning Alignment
 Prune alignment columns recursively based on Chi-square test:
