@@ -30,6 +30,7 @@ pip install -e .
 ```
 
 **4. Running Tests:**
+
 As an example we use the compositionally biased 5 taxon dataset from Foster et al. 2022 (PMID: 36083446). The dataset is available in the `tests` directory.
 Run the tests using unittest:
 ```bash
