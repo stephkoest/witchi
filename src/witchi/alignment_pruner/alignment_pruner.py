@@ -129,7 +129,7 @@ class AlignmentPruner:
                     print(f"Pruning complete. Exiting.")
                     self.top_n = initial_topn
                     break
-            if upper_chi_quantile <= upper_threshold:
+            if upper_chi_quantile <= upper_threshold and per_row_chi2_median <= upper_box_threshold:
                 print(f"Pruning complete. Exiting.")
                 self.top_n = initial_topn
                 break
