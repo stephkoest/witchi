@@ -8,4 +8,6 @@ dependencies:
   - scipy
   - biopython
   - joblib
+  - seaborn
+  - matplotlib
   - pip
