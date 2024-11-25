@@ -84,6 +84,8 @@ class PermutationTest:
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Execution time for testing: {elapsed_time:.2f} seconds")
+        output_json_file = alignment_file.replace('.fasta', '_score_dict.json')
+        #self.permutation_test.write_score_dict_to_json(score_dict, output_json_file)
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
     def write_score_dict_to_json(self, dictionary, file_name):
