@@ -12,10 +12,15 @@ class PermutationTest:
     def calc_pseudo_pvalue(self, per_row_chi2, permutated_per_row_chi2):
         """Calculate pseudo p-value."""
         pseudo_p_list = []
-        for i in range(len(per_row_chi2)):
-            #divide number of permutated_per_row_chi2 larger than per_row_chi2[i] by the number of taxa in permutations to get the probability of the chi2 score
-            pseudo_p = (np.sum(permutated_per_row_chi2 >= per_row_chi2[i]) / len(permutated_per_row_chi2)) * len(per_row_chi2)
+        if isinstance(per_row_chi2, np.ndarray):
+            for i in range(len(per_row_chi2)):
+                #divide number of permutated_per_row_chi2 larger than per_row_chi2[i] by the number of taxa in permutations to get the probability of the chi2 score
+                pseudo_p = (np.sum(permutated_per_row_chi2 >= per_row_chi2[i]) / len(permutated_per_row_chi2)) * len(per_row_chi2)
+                pseudo_p_list.append(pseudo_p)
+        else:
+            pseudo_p = (np.sum(permutated_per_row_chi2 >= per_row_chi2) / len(permutated_per_row_chi2))
             pseudo_p_list.append(pseudo_p)
+
         return pseudo_p_list
 
     def run(self, alignment_array, chi_square_calculator):
@@ -35,15 +40,16 @@ class PermutationTest:
         )
 
         permutated_per_row_chi2 = np.array(permutated_per_row_chi2)
-        means = np.mean(permutated_per_row_chi2, axis=1)
         maxes = np.max(permutated_per_row_chi2, axis=1)
+        #gett sums for every permutation
+        sums = np.sum(permutated_per_row_chi2, axis=1)
         # Flatten the list of chi-squared scores
         permutated_per_row_chi2 = np.concatenate(permutated_per_row_chi2)
 
         upper_box_threshold = np.percentile(permutated_per_row_chi2, 75)
         upper_threshold = np.percentile(permutated_per_row_chi2, 95)
 
-        return means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2
+        return sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2
 
     def run_test(self, alignment_file, alignment_format):
         """Run the permutation test on an alignment."""
@@ -59,7 +65,7 @@ class PermutationTest:
         self.is_dna = detector.is_dna
         char_set = detector.char_set
         self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
-        means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = self.run(alignment_array, self.chi_square_calculator)
+        sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = self.run(alignment_array, self.chi_square_calculator)
         mean_perm_chi2 = np.mean(permutated_per_row_chi2)
         sd_perm_chi2 = np.std(permutated_per_row_chi2)
 
@@ -76,6 +82,7 @@ class PermutationTest:
         #sorted_row_chi2 = dict(sorted(row_chi2_dict.items(), key=lambda item: item[1], reverse=True))
         pseudo_pvalues = self.calc_pseudo_pvalue(per_row_chi2, permutated_per_row_chi2)
         print(f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
+        print(f"Permutations alignment chi2scores: {(min(sums)):.2f} - {(max(sums)):.2f} | Alignment chi2score: {(np.sum(per_row_chi2)):.2f} | Pseudo-P: {self.calc_pseudo_pvalue(np.sum(per_row_chi2),sums)[0] }")
         print(f"Permutations mean chi2score: {(mean_perm_chi2):.2f} | Alignment mean chi2score: {(np.mean(per_row_chi2)):.2f} ")
         row_pseudo_pvalue_dict = {row_names[i]: pseudo_pvalues[i] for i in range(len(row_names))}
         significant_list = [" ".join([str(t), str(row_pseudo_pvalue_dict[t])]) for t in row_pseudo_pvalue_dict.keys() if row_pseudo_pvalue_dict[t] < 0.05]

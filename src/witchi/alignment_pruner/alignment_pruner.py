@@ -40,10 +40,10 @@ class AlignmentPruner:
         self.significance_level = self.dna_significance_level if self.is_dna else self.aa_significance_level
         self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
         self.permutation_test = PermutationTest(self.num_workers, self.permutations)
-        means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = self.permutation_test.run(alignment_array, self.chi_square_calculator)
+        sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = self.permutation_test.run(alignment_array, self.chi_square_calculator)
         median_perm_chi2 = np.median(permutated_per_row_chi2)
         mad_perm_chi2 = np.median(np.abs(permutated_per_row_chi2 - median_perm_chi2))
-        pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(alignment_array, means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2, median_perm_chi2, mad_perm_chi2)
+        pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(alignment_array, sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2, median_perm_chi2, mad_perm_chi2)
 
         pruned_sequences = self.update_sequences(alignment, pruned_alignment_array)
         pruned_alignment = MultipleSeqAlignment(pruned_sequences)
@@ -65,7 +65,7 @@ class AlignmentPruner:
         elapsed_time = end_time - start_time
         print(f"Execution time: {elapsed_time:.2f} seconds")
 
-    def prune(self, alignment_array, expected_observed, count_rows_array, means, permutated_per_row_chi2, upper_box_threshold, upper_threshold):
+    def prune(self, alignment_array, expected_observed, count_rows_array, sums, permutated_per_row_chi2, upper_box_threshold, upper_threshold):
         if self.pruning_algorithm == 'global':
             initial_global_chi2 = self.chi_square_calculator.calculate_global_chi2(expected_observed, count_rows_array)
             chi2_differences = self.chi_square_calculator.calculate_global_chi2_difference(count_rows_array, alignment_array, initial_global_chi2)
@@ -89,7 +89,7 @@ class AlignmentPruner:
 
         return initial_global_chi2, chi2_differences
 
-    def recursive_prune(self, alignment_array, means, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2, median_perm_chi2, mad_perm_chi2):
+    def recursive_prune(self, alignment_array, sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2, median_perm_chi2, mad_perm_chi2):
         """Recursively prune the alignment array."""
         prune_dict = {}
         score_dict = {}
@@ -134,7 +134,7 @@ class AlignmentPruner:
                 self.top_n = initial_topn
                 break
 
-            initial_global_chi2, chi2_differences = self.prune(alignment_array, expected_observed, count_rows_array, means, permutated_per_row_chi2, upper_box_threshold, upper_threshold)
+            initial_global_chi2, chi2_differences = self.prune(alignment_array, expected_observed, count_rows_array, sums, permutated_per_row_chi2, upper_box_threshold, upper_threshold)
             #Sort the columns by the chi2 difference and get the top n columns to prune
             top_n_indices = np.argsort(list(chi2_differences.values()))[-self.top_n:]
             for col in top_n_indices:
