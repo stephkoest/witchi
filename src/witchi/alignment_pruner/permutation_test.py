@@ -1,6 +1,8 @@
 import json
 import numpy as np
 from joblib import Parallel, delayed
+from networkx.algorithms.components import number_weakly_connected_components
+from Bio.Align import MultipleSeqAlignment
 
 class PermutationTest:
     def __init__(self, num_workers, permutations):
@@ -27,6 +29,9 @@ class PermutationTest:
             count_rows_array = chi_square_calculator.calculate_row_counts(permuted_array)
             expected_observed = chi_square_calculator.calculate_expected_observed(count_rows_array)
             per_row_chi2 = chi_square_calculator.calculate_row_chi2(expected_observed, count_rows_array)
+            sequences = self.pruner.update_sequences(permuted_array)
+            pruned_alignment = MultipleSeqAlignment(sequences)
+            self.pruner.write_alignment(pruned_alignment, "data/test_0.fasta")
             return per_row_chi2
 
         print(f"Running {self.permutations} permutations.")
@@ -50,8 +55,10 @@ class PermutationTest:
         from .alignment_reader import AlignmentReader
         from .sequence_type_detector import SequenceTypeDetector
         from .chi_square_calculator import ChiSquareCalculator
+        from .alignment_pruner import AlignmentPruner
         import time
         start_time = time.time()
+        self.pruner = AlignmentPruner(alignment_file, num_workers= self.num_workers, permutations= self.permutations)
         reader = AlignmentReader(alignment_file, alignment_format)
         alignment, alignment_array = reader.run()
         detector = SequenceTypeDetector()
