@@ -33,7 +33,7 @@ class PermutationTest:
             count_rows_array = chi_square_calculator.calculate_row_counts(permuted_array)
             expected_observed = chi_square_calculator.calculate_expected_observed(count_rows_array)
             per_row_chi2 = chi_square_calculator.calculate_row_chi2(expected_observed, count_rows_array)
-            sequences = self.pruner.update_sequences(permuted_array)
+            sequences = self.pruner.update_sequences(self.alignment, permuted_array)
             pruned_alignment = MultipleSeqAlignment(sequences)
             self.pruner.write_alignment(pruned_alignment, f"data/test_{i}.fasta")
             return per_row_chi2
@@ -68,6 +68,7 @@ class PermutationTest:
         alignment, alignment_array = reader.run()
         detector = SequenceTypeDetector()
         detector.detect_sequence_type(alignment)
+        self.alignment = alignment
         self.is_dna = detector.is_dna
         char_set = detector.char_set
         self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
