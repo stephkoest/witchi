@@ -98,7 +98,7 @@ witchi test --file alignment.fasta --format fasta --num_workers 4 --permutations
 ## Example Workflow
 1. Run permutation test:
 ```bash
-witchi test --file example.nex --permutations 100
+witchi test --file example.nex --format "nexus"
 ```
 2. Prune alignment with Wasserstein distance guidance:
 ```bash
