@@ -24,19 +24,19 @@ class ChiSquarePlotter:
         # Normalize the distributions to match ASCII space
         x_min = min([np.min(dist) for dist in distributions])
         x_max = max([np.max(dist) for dist in distributions])
-        x_values = np.linspace(x_min, x_max, 10)
+        x_values = np.linspace(x_min - (0.1 * abs(x_min)) , x_max + (0.1 * abs(x_max)), 10)
 
         # Generate ASCII plot using gnuplotlib
         plots = []
         for dist, label in zip(distributions, labels):
-            y_values, _ = np.histogram(dist, bins=10, range=(x_min, x_max), density=True)
+            y_values, _ = np.histogram(dist, bins=10, range=(x_min - (0.5 * abs(x_min)) , x_max + (0.5 * abs(x_max))), density=True)
             plots.append(
                 (x_values, y_values, dict(legend=label, _with="lines"))
             )
 
         gp.plot(
             *plots,
-            terminal="dumb 100,40",  # ASCII art with appropriate dimensions
+            terminal="dumb 100,30",  # ASCII art with appropriate dimensions
             title="Chi-square Distributions (ASCII Art)",
             xlabel="Log(Chiscore)",
             ylabel="Density",
