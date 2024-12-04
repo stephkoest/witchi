@@ -10,4 +10,6 @@ dependencies:
   - joblib
   - seaborn
   - matplotlib
-  - pip
+  - gnuplot
+  - pip:
+     - "--editable=git+https://github.com/dkogan/gnuplotlib.git#egg=gnuplotlib"
