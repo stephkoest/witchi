@@ -100,6 +100,9 @@ witchi test --file alignment.fasta --format fasta --num_workers 4 --permutations
 ```bash
 witchi test --file example.nex --format "nexus"
 ```
+You can run this on multiple subsets of the dataset, with different taxon sampling for example.
+Once tyou have chose datasets you want to prune, go to the next step.
+
 2. Prune alignment with Wasserstein distance guidance:
 ```bash
 witchi prune --file example.nex --max_residue_pruned 50 --pruning_algorithm wasserstein
