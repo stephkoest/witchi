@@ -109,7 +109,7 @@ witchi prune --file example.nex --max_residue_pruned 50 --pruning_algorithm wass
 ```
 
 ## Future Features
-Real-Time Visualization: Live plotting of distribution shifts during pruning.
+Real-Time Visualization: Live plotting of distribution shifts in the terminal during pruning.
 
 ## License
 witchi is licensed under the MIT License.
