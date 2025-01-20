@@ -68,7 +68,6 @@ witchi test --file alignment.fasta --format fasta --num_workers 4 --permutations
 
 ## Pruning Algorithms
 - **Global Pruning**: Prioritizes columns with the highest global delta Chi-square score.
-- **Outlyingness Pruning**: Focuses on removing columns contributing to outlier taxa.
 - **Wasserstein Pruning**: Guides pruning by minimizing Wasserstein distance to the unbiased distribution.
 - **Squared Pruning**: Targets columns that maximize squared Chi-square score differences.
 
