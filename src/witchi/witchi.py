@@ -18,6 +18,8 @@ def main():
                               help='Number of top delta-chi2 columns to remove. Default is 1.')
     prune_parser.add_argument('--pruning_algorithm', default='squared',
                               help='Pruning algorithm to use: global, outlyingness, wasserstein, squared')
+    #add touchdown
+    prune_parser.add_argument('--touchdown', type=bool, default=False, help='Touchdown mode')
 
     test_parser = subparsers.add_parser('test', help='Run permutation test on alignment.')
     test_parser.add_argument('--file', required=True, help='File containing the alignment')

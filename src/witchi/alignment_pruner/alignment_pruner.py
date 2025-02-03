@@ -13,12 +13,13 @@ from .sequence_type_detector import SequenceTypeDetector
 from .alignment_reader import AlignmentReader
 
 class AlignmentPruner:
-    def __init__(self, file, format='fasta', max_residue_pruned=100, permutations=100, num_workers=2, top_n=10, pruning_algorithm='global'):
+    def __init__(self, file, format='fasta', max_residue_pruned=100, permutations=100, num_workers=2, top_n=10, pruning_algorithm='global', touchdown=False):
         self.file = file
         self.format = format
         self.max_residue_pruned = max_residue_pruned
         self.permutations = permutations
         self.num_workers = num_workers
+        self.touchdown = touchdown
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
         self.is_dna = None
@@ -121,7 +122,7 @@ class AlignmentPruner:
             significant_count = sum(p <= 0.05 for p in pseudo_pvalues)
 
             if per_row_chi2_median <= upper_box_threshold:
-                if self.pruning_algorithm == 'wasserstein':
+                if self.touchdown:
                     if self.top_n > 5:
                         self.top_n = 5
             if per_row_chi2_mean <= mean_perm_chi2:
