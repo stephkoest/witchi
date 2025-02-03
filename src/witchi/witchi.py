@@ -2,6 +2,7 @@ import argparse
 from witchi.alignment_pruner.alignment_pruner import AlignmentPruner
 from witchi.alignment_pruner.permutation_test import PermutationTest
 
+
 def main():
     parser = argparse.ArgumentParser(description='Recursively prune alignment based on chi-square test.')
     subparsers = parser.add_subparsers(dest='command', required=True)
@@ -18,8 +19,11 @@ def main():
                               help='Number of top delta-chi2 columns to remove. Default is 1.')
     prune_parser.add_argument('--pruning_algorithm', default='squared',
                               help='Pruning algorithm to use: global, outlyingness, wasserstein, squared')
-    #add touchdown
-    prune_parser.add_argument('--touchdown', type=bool, default=False, help='Touchdown mode')
+    # add touchdown
+    prune_parser.add_argument('--touchdown', type=bool, default=False, help='Touchdown mode, if True, the number of '
+                                                                            'columns to prune will be reduced to 5 '
+                                                                            'per iteration until no columns are left '
+                                                                            'to prune.')
 
     test_parser = subparsers.add_parser('test', help='Run permutation test on alignment.')
     test_parser.add_argument('--file', required=True, help='File containing the alignment')
@@ -38,6 +42,7 @@ def main():
     elif args.command == 'test':
         tester = PermutationTest(num_workers=args.num_workers, permutations=args.permutations)
         tester.run_test(alignment_file=args.file, alignment_format=args.format)
+
 
 if __name__ == '__main__':
     main()
