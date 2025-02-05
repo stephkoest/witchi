@@ -126,14 +126,14 @@ class AlignmentPruner:
                     if self.top_n > 5:
                         self.top_n = 5
             if per_row_chi2_mean <= mean_perm_chi2:
-                if self.pruning_algorithm == 'global':
-                    print(f"Pruning complete. Exiting.")
-                    self.top_n = initial_topn
-                    break
-            if upper_chi_quantile <= upper_threshold and per_row_chi2_median <= upper_box_threshold:
+                #if self.pruning_algorithm == 'global':
                 print(f"Pruning complete. Exiting.")
                 self.top_n = initial_topn
                 break
+            #if upper_chi_quantile <= upper_threshold and per_row_chi2_median <= upper_box_threshold:
+            #    print(f"Pruning complete. Exiting.")
+            #    self.top_n = initial_topn
+            #    break
 
             initial_global_chi2, chi2_differences = self.prune(alignment_array, expected_observed, count_rows_array, sums, permutated_per_row_chi2, upper_box_threshold, upper_threshold)
             #Sort the columns by the chi2 difference and get the top n columns to prune
