@@ -136,7 +136,7 @@ class AlignmentPruner:
                 print(f"Pruning complete. Exiting because of taxa p-value.")
                 self.top_n = initial_topn
                 break
-            if alignment_pseudopvalue <= 0.05:
+            if alignment_pseudopvalue >= 0.05:
                 #if self.pruning_algorithm == 'global':
                 print(f"Pruning complete. Exiting because of alignment p-value.")
                 self.top_n = initial_topn
@@ -159,7 +159,11 @@ class AlignmentPruner:
             count_rows_array = self.chi_square_calculator.calculate_row_counts(alignment_array)
             original_indices = [i for j, i in enumerate(original_indices) if j not in top_n_indices]
             iteration += 1
-            print(f"Columns removed: {removed_columns_count}, {(removed_columns_count / alignment_size) * 100:.2f}% | Biased taxa permutation: {significant_count} | Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
+            print(f"Columns removed: {removed_columns_count}, {(removed_columns_count / alignment_size) * 100:.2f}% | "
+                  f"Biased taxa permutation: {significant_count} | "
+                  f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
+                  f"q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f} | "
+                  f"Alignment p-value: {alignment_pseudopvalue:.2f}")
 
         score_dict["after_real"] = per_row_chi2
 
