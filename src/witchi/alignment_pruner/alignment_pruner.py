@@ -120,6 +120,7 @@ class AlignmentPruner:
 
             pseudo_pvalues = self.permutation_test.calc_pseudo_pvalue(per_row_chi2, permutated_per_row_chi2)
             significant_count = sum(p <= 0.05 for p in pseudo_pvalues)
+            alignment_pseudopvalue = self.permutation_test.calc_pseudo_pvalue(np.sum(per_row_chi2), sums)[0]
 
             if per_row_chi2_median <= upper_box_threshold:
                 if self.touchdown:
@@ -127,14 +128,20 @@ class AlignmentPruner:
                         self.top_n = 5
             if per_row_chi2_median <= upper_box_threshold: #old rule: per_row_chi2_median <= mean_perm_chi2
                 #if self.pruning_algorithm == 'global':
-                print(f"Pruning complete. Exiting.")
+                print(f"Pruning complete. Exiting because of 75% quantile threshold.")
                 self.top_n = initial_topn
                 break
             if significant_count == 0: #quit when no significant taxa are left
                 #if self.pruning_algorithm == 'global':
-                print(f"Pruning complete. Exiting.")
+                print(f"Pruning complete. Exiting because of taxa p-value.")
                 self.top_n = initial_topn
                 break
+            if alignment_pseudopvalue <= 0.05:
+                #if self.pruning_algorithm == 'global':
+                print(f"Pruning complete. Exiting because of alignment p-value.")
+                self.top_n = initial_topn
+                break
+
             #if upper_chi_quantile <= upper_threshold and per_row_chi2_median <= upper_box_threshold:
             #    print(f"Pruning complete. Exiting.")
             #    self.top_n = initial_topn
