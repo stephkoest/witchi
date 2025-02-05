@@ -130,6 +130,11 @@ class AlignmentPruner:
                 print(f"Pruning complete. Exiting.")
                 self.top_n = initial_topn
                 break
+            if significant_count == 0: #quit when no significant taxa are left
+                #if self.pruning_algorithm == 'global':
+                print(f"Pruning complete. Exiting.")
+                self.top_n = initial_topn
+                break
             #if upper_chi_quantile <= upper_threshold and per_row_chi2_median <= upper_box_threshold:
             #    print(f"Pruning complete. Exiting.")
             #    self.top_n = initial_topn
