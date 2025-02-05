@@ -126,11 +126,7 @@ class AlignmentPruner:
                 if self.touchdown:
                     if self.top_n > 5:
                         self.top_n = 5
-            if per_row_chi2_median <= upper_box_threshold: #old rule: per_row_chi2_median <= mean_perm_chi2
-                #if self.pruning_algorithm == 'global':
-                print(f"Pruning complete. Exiting because of 75% quantile threshold.")
-                self.top_n = initial_topn
-                break
+
             if significant_count == 0: #quit when no significant taxa are left
                 #if self.pruning_algorithm == 'global':
                 print(f"Pruning complete. Exiting because of taxa p-value.")
