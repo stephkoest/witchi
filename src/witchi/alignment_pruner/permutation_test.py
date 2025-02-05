@@ -13,11 +13,13 @@ class PermutationTest:
     def calc_pseudo_pvalue(self, per_row_chi2, permutated_per_row_chi2):
         """Calculate pseudo p-value."""
         pseudo_p_list = []
+        #check if array, indicating per taxon chi2 scores
         if isinstance(per_row_chi2, np.ndarray):
             for i in range(len(per_row_chi2)):
                 #divide number of permutated_per_row_chi2 larger than per_row_chi2[i] by the number of taxa in permutations to get the probability of the chi2 score
                 pseudo_p = (np.sum(permutated_per_row_chi2 >= per_row_chi2[i]) / len(permutated_per_row_chi2)) * len(per_row_chi2)
                 pseudo_p_list.append(pseudo_p)
+        #if not array, indicating total alignment chi2 scores
         else:
             pseudo_p = (np.sum(permutated_per_row_chi2 >= per_row_chi2) / len(permutated_per_row_chi2))
             pseudo_p_list.append(pseudo_p)
