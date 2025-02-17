@@ -77,22 +77,14 @@ class PermutationTest:
         row_counts = self.chi_square_calculator.calculate_row_counts(alignment_array)
         row_expected_observed = self.chi_square_calculator.calculate_expected_observed(row_counts)
         per_row_chi2 = self.chi_square_calculator.calculate_row_chi2(row_expected_observed, row_counts)
-        significant_count_permutation = np.sum(per_row_chi2 > upper_threshold)
 
         upper_chi_quantile = np.percentile(per_row_chi2, 95)
 
-        # Extract row names
-        row_names = [record.id for record in alignment]
-        # Sort the dictionary by chi-squared scores in descending order
-        #sorted_row_chi2 = dict(sorted(row_chi2_dict.items(), key=lambda item: item[1], reverse=True))
+        print(f"Alignment chi2score: {(np.sum(per_row_chi2)):.2f} | Permutations alignment chi2scores: {(min(sums)):.2f} - {(max(sums)):.2f} | Pseudo-P: {self.calc_pseudo_pvalue(np.sum(per_row_chi2),sums)[0] }")
+        print(f"Alignment mean taxa chi2score: {(np.mean(per_row_chi2)):.2f} | Permutations mean taxa chi2score: {(mean_perm_chi2):.2f} |  Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
+        #calculate zscores and pseudo p-values for each row
         pseudo_pvalues = self.calc_pseudo_pvalue(per_row_chi2, permutated_per_row_chi2)
-        zscores = (per_row_chi2 - mean_perm_chi2) / sd_perm_chi2
-        print(f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f}")
-        print(f"Permutations alignment chi2scores: {(min(sums)):.2f} - {(max(sums)):.2f} | Alignment chi2score: {(np.sum(per_row_chi2)):.2f} | Pseudo-P: {self.calc_pseudo_pvalue(np.sum(per_row_chi2),sums)[0] }")
-        print(f"Permutations mean chi2score: {(mean_perm_chi2):.2f} | Alignment mean chi2score: {(np.mean(per_row_chi2)):.2f} ")
-        # Calculate pvalues for each row
-        row_pseudo_pvalue_dict = {row_names[i]: {'pseudo_pvalue': pseudo_pvalues[i], 'zscore': zscores[i]} for i in
-                                  range(len(row_names))}
+        row_pseudo_pvalue_dict = self.make_score_dict(per_row_chi2, permutated_per_row_chi2, pseudo_pvalues, alignment)
         #check for significant rows
         significant_list = [" ".join([str(t), str(row_pseudo_pvalue_dict[t])]) for t in row_pseudo_pvalue_dict.keys() if row_pseudo_pvalue_dict[t]['pseudo_pvalue'] < 0.05]
         significant_string = ", ".join(significant_list)
@@ -102,11 +94,39 @@ class PermutationTest:
             output_tsv_file = alignment_file.replace('.' + alignment_file.split('.')[-1], '_scores.tsv')
             self.write_score_dict_to_tsv(row_pseudo_pvalue_dict, output_tsv_file)
             print(f"Printing taxa p-values and z-scores to file: {output_tsv_file}")
+            #still print the top 5 z-score taxa to console
+            print(f"Top 5 taxa z-scores and corresponding pseudo p-values:")
+            for t in list(row_pseudo_pvalue_dict.keys())[:5]:
+                print(f"{t}\t{row_pseudo_pvalue_dict[t]['zscore']}\t{row_pseudo_pvalue_dict[t]['pseudo_pvalue']}")
+        else:
+            #print to console the zscore and pvalue per taxa from row_pseudo_pvalue_dict
+            print(f"Taxa z-scores and pseudo p-values:")
+            for t in row_pseudo_pvalue_dict.keys():
+                #print it in tabular format per taxon
+                print(f"{t}\t{row_pseudo_pvalue_dict[t]['zscore']}\t{row_pseudo_pvalue_dict[t]['pseudo_pvalue']}")
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Execution time for testing: {elapsed_time:.2f} seconds")
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
+    def make_score_dict(self, per_row_chi2, permutated_per_row_chi2, pseudo_pvalues, alignment):
+        """Make a dictionary of chi-squared scores for each row in the alignment."""
+        # Extract row names
+        per_row_chi2 = np.array(per_row_chi2)
+        row_names = [record.id for record in alignment]
+        mean_perm_chi2 = np.mean(permutated_per_row_chi2)
+        sd_perm_chi2 = np.std(permutated_per_row_chi2)
+        # Sort the dictionary by chi-squared scores in descending order
+        zscores = (per_row_chi2 - mean_perm_chi2) / sd_perm_chi2
+
+        # Calculate pvalues for each row
+        row_pseudo_pvalue_dict = {row_names[i]: {'pseudo_pvalue': pseudo_pvalues[i], 'zscore': zscores[i]} for i in
+                                  range(len(row_names))}
+        # sort row_pseudo_pvalue_dict by z-score in decending order
+        row_pseudo_pvalue_dict = dict(
+            sorted(row_pseudo_pvalue_dict.items(), key=lambda item: item[1]['zscore'], reverse=True))
+
+        return row_pseudo_pvalue_dict
     def write_score_dict_to_tsv(self, dictionary, file_name):
         """Write the score dictionary to a TSV file, ordered by descending absolute z-score."""
         # Sort the dictionary by descending absolute z-score

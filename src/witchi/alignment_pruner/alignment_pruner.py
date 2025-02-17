@@ -55,12 +55,19 @@ class AlignmentPruner:
         self.write_alignment(pruned_alignment, output_alignment_pruned_file)
         self.write_pruned_dict_to_tsv(prune_dict, output_tsv_file)
 
-        output_json_file = os.path.splitext(self.file)[0] + suffix.replace('.fasta', '_score_dict.json')
-        self.permutation_test.write_score_dict_to_json(score_dict, output_json_file)
+        output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace('.fasta', '_score_dict.tsv')
+        #something to clean later, reintegrate into the main function
+        pseudo_pvalues = self.permutation_test.calc_pseudo_pvalue(score_dict["after_real"], permutated_per_row_chi2)
+        row_pseudo_pvalue_dict = self.permutation_test.make_score_dict(score_dict["after_real"],
+                                                                       permutated_per_row_chi2,
+                                                                       pseudo_pvalues,
+                                                                       alignment)
+        output_score_tsv_file = os.path.splitext(self.file)[0] + suffix.replace('.fasta', '_scores.tsv')
+        self.permutation_test.write_score_dict_to_tsv(row_pseudo_pvalue_dict, output_score_tsv_file)
         print(f"Pruned {len(prune_dict.keys())} columns.")
         print(f"Pruned alignment saved to {output_alignment_pruned_file}")
         print(f"Columns pruned in order saved to: {output_tsv_file}")
-        print(f"Chiscore values from permutation testing printed to {output_json_file}")
+        print(f"Taxa p-values and z-scores printed to {output_score_tsv_file}")
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -181,7 +188,8 @@ class AlignmentPruner:
             AlignIO.write(alignment, output_handle, self.format)
 
     def write_pruned_dict_to_tsv(self, dictionary, file_name):
-        headers = ['Iteration', 'Original Index', 'Global ChiScore', 'Initial Significant ChiScore', 'ChiScore Difference', 'Significant taxa', 'Algorithm']
+        headers = ['Iteration', 'Original Index', 'Global ChiScore', 'Initial Significant ChiScore',
+                   'ChiScore Difference', 'Significant taxa', 'Algorithm']
         with open(file_name, 'w', newline='') as tsvfile:
             writer = csv.DictWriter(tsvfile, fieldnames=headers, delimiter='\t')
             writer.writeheader()
@@ -190,8 +198,8 @@ class AlignmentPruner:
                     'Iteration': values[0],
                     'Original Index': values[1],
                     'Global ChiScore': values[2],
-                    'Optimization Parameter': values[3],
-                    'Score Difference': values[4],
+                    'Initial Significant ChiScore': values[3],
+                    'ChiScore Difference': values[4],
                     'Significant taxa': values[5],
                     'Algorithm': self.pruning_algorithm
                 }
