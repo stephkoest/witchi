@@ -65,6 +65,7 @@ witchi test --file alignment.fasta --format fasta --num_workers 4 --permutations
 - `--format`: Alignment format (default: fasta).
 - `--num_workers`: Number of CPU threads (default: 2).
 - `--permutations`: Number of permutations (default: 100).
+- `--create_output`: Flag to create output file with z-scores and pseudo p-values per taxon.
 
 ## Pruning Algorithms
 - **Global Pruning**: Prioritizes columns with the highest global delta Chi-square score.
