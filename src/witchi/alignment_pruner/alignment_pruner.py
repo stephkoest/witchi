@@ -79,7 +79,6 @@ class AlignmentPruner:
             initial_global_chi2 = outlyingness_sum
         elif self.pruning_algorithm == 'wasserstein':
             wasserstein = self.chi_square_calculator.calculate_row_chi2_wasserstein(expected_observed, count_rows_array, permutated_per_row_chi2)
-            print(f"Initial wasserstein distance: {wasserstein}")
             chi2_differences = self.chi_square_calculator.calculate_wasserstein_difference(count_rows_array, alignment_array, wasserstein, permutated_per_row_chi2)
             initial_global_chi2 = wasserstein
         elif self.pruning_algorithm == 'squared':
@@ -132,7 +131,7 @@ class AlignmentPruner:
                 print(f"Pruning complete. Exiting because of taxa p-value.")
                 self.top_n = initial_topn
                 break
-            if alignment_pseudopvalue >= 0.05:
+            if alignment_pseudopvalue >= 0.94:
                 #if self.pruning_algorithm == 'global':
                 print(f"Pruning complete. Exiting because of alignment p-value.")
                 self.top_n = initial_topn
