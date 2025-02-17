@@ -31,6 +31,7 @@ def main():
     test_parser.add_argument('--num_workers', type=int, default=2,
                              help='Number of parallel workers (cores) to use. (2)')
     test_parser.add_argument('--permutations', type=int, default=100, help='Number of alignment permutations. (100)')
+    test_parser.add_argument('--create_output', action='store_true', help='Flag to create output file with scores.')
 
     args = parser.parse_args()
 
@@ -41,8 +42,4 @@ def main():
         pruner.run()
     elif args.command == 'test':
         tester = PermutationTest(num_workers=args.num_workers, permutations=args.permutations)
-        tester.run_test(alignment_file=args.file, alignment_format=args.format)
-
-
-if __name__ == '__main__':
-    main()
+   
