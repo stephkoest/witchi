@@ -1,6 +1,7 @@
 import json
 import numpy as np
 from joblib import Parallel, delayed
+import csv
 from Bio.Align import MultipleSeqAlignment
 
 class PermutationTest:
@@ -98,23 +99,21 @@ class PermutationTest:
         print(f"Biased Taxa based on corrected pseudo-p-values: {len(significant_list)} of {np.shape(per_row_chi2)[0]}")
         if create_output:
             #remove file general file extension after last point (could be fasta or other) form alignment file and add _score_dict.json
-            output_json_file = alignment_file.replace('.' + alignment_file.split('.')[-1], '_score_dict.json')
-            self.write_score_dict_to_json(row_pseudo_pvalue_dict, output_json_file)
-            print(f"Printing taxa p-values and z-scores to file: {output_json_file}")
+            output_tsv_file = alignment_file.replace('.' + alignment_file.split('.')[-1], '_scores.tsv')
+            self.write_score_dict_to_tsv(row_pseudo_pvalue_dict, output_tsv_file)
+            print(f"Printing taxa p-values and z-scores to file: {output_tsv_file}")
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Execution time for testing: {elapsed_time:.2f} seconds")
         #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
-    def write_score_dict_to_json(self, dictionary, file_name):
-        """Write the score dictionary to a JSON file, ordered by descending absolute z-score."""
-        def convert_ndarray(obj):
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
+    def write_score_dict_to_tsv(self, dictionary, file_name):
+        """Write the score dictionary to a TSV file, ordered by descending absolute z-score."""
         # Sort the dictionary by descending absolute z-score
         sorted_dict = dict(sorted(dictionary.items(), key=lambda item: abs(item[1]['zscore']), reverse=True))
 
-        with open(file_name, 'w') as jsonfile:
-            json.dump(sorted_dict, jsonfile, indent=4, default=convert_ndarray)
+        with open(file_name, 'w', newline='') as tsvfile:
+            writer = csv.writer(tsvfile, delimiter='\t')
+            writer.writerow(['Row', 'Pseudo-Pvalue', 'Z-Score'])
+            for row, values in sorted_dict.items():
+                writer.writerow([row, values['pseudo_pvalue'], values['zscore']])
