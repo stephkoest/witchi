@@ -42,4 +42,8 @@ def main():
         pruner.run()
     elif args.command == 'test':
         tester = PermutationTest(num_workers=args.num_workers, permutations=args.permutations)
-   
+        tester.run_test(alignment_file=args.file, alignment_format=args.format, create_output=args.create_output)
+
+
+if __name__ == '__main__':
+    main()

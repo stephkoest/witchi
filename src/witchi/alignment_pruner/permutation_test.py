@@ -103,4 +103,18 @@ class PermutationTest:
             print(f"Printing taxa p-values and z-scores to file: {output_json_file}")
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"Execution time for testing: {elapsed_time:.2f} sec
+        print(f"Execution time for testing: {elapsed_time:.2f} seconds")
+        #self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
+
+    def write_score_dict_to_json(self, dictionary, file_name):
+        """Write the score dictionary to a JSON file, ordered by descending absolute z-score."""
+        def convert_ndarray(obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+        # Sort the dictionary by descending absolute z-score
+        sorted_dict = dict(sorted(dictionary.items(), key=lambda item: abs(item[1]['zscore']), reverse=True))
+
+        with open(file_name, 'w') as jsonfile:
+            json.dump(sorted_dict, jsonfile, indent=4, default=convert_ndarray)
