@@ -190,8 +190,8 @@ class AlignmentPruner:
                     'Iteration': values[0],
                     'Original Index': values[1],
                     'Global ChiScore': values[2],
-                    'Initial Significant ChiScore': values[3],
-                    'ChiScore Difference': values[4],
+                    'Optimization Parameter': values[3],
+                    'Score Difference': values[4],
                     'Significant taxa': values[5],
                     'Algorithm': self.pruning_algorithm
                 }
