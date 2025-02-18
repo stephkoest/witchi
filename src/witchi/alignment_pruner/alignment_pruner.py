@@ -64,10 +64,14 @@ class AlignmentPruner:
                                                                        alignment)
         output_score_tsv_file = os.path.splitext(self.file)[0] + suffix.replace('.fasta', '_scores.tsv')
         self.permutation_test.write_score_dict_to_tsv(row_pseudo_pvalue_dict, output_score_tsv_file)
+        #NOW MAKE JSON
+        output_json_file = os.path.splitext(self.file)[0] + suffix.replace('.fasta', '_score_dict.json')
+        self.permutation_test.write_score_dict_to_json(score_dict, output_json_file)
         print(f"Pruned {len(prune_dict.keys())} columns.")
         print(f"Pruned alignment saved to {output_alignment_pruned_file}")
         print(f"Columns pruned in order saved to: {output_tsv_file}")
         print(f"Taxa p-values and z-scores printed to {output_score_tsv_file}")
+        print(f"Chiscore values from permutation testing printed to {output_json_file}")
 
         end_time = time.time()
         elapsed_time = end_time - start_time

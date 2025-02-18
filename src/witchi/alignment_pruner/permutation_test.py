@@ -137,3 +137,13 @@ class PermutationTest:
             writer.writerow(['Row', 'Pseudo-Pvalue', 'Z-Score'])
             for row, values in sorted_dict.items():
                 writer.writerow([row, values['pseudo_pvalue'], values['zscore']])
+
+    def write_score_dict_to_json(self, dictionary, file_name):
+        """Write the score dictionary to a JSON file."""
+        def convert_ndarray(obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+        with open(file_name, 'w') as jsonfile:
+            json.dump(dictionary, jsonfile, indent=4, default=convert_ndarray)
