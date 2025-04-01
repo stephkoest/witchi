@@ -78,23 +78,16 @@ class AlignmentPruner:
         print(f"Execution time: {elapsed_time:.2f} seconds")
 
     def prune(self, alignment_array, expected_observed, count_rows_array, sums, permutated_per_row_chi2, upper_box_threshold, upper_threshold):
-        if self.pruning_algorithm == 'global':
+        if self.pruning_algorithm == 'squared':
             initial_global_chi2 = self.chi_square_calculator.calculate_global_chi2(expected_observed, count_rows_array)
             chi2_differences = self.chi_square_calculator.calculate_global_chi2_difference(count_rows_array, alignment_array, initial_global_chi2)
-        elif self.pruning_algorithm == 'outlyingness':
-            median_perm_chi2 = np.median(permutated_per_row_chi2)
-            mad_perm_chi2 = np.median(np.abs(permutated_per_row_chi2 - median_perm_chi2))
-            outlyingness_sum = self.chi_square_calculator.calculate_row_chi2_outlyingness_sum(expected_observed, count_rows_array, median_perm_chi2, mad_perm_chi2)
-            chi2_differences = self.chi_square_calculator.calculate_outlyingness_difference(count_rows_array, alignment_array,
-                                                                          outlyingness_sum, median_perm_chi2, mad_perm_chi2)
-            initial_global_chi2 = outlyingness_sum
         elif self.pruning_algorithm == 'wasserstein':
             wasserstein = self.chi_square_calculator.calculate_row_chi2_wasserstein(expected_observed, count_rows_array, permutated_per_row_chi2)
             chi2_differences = self.chi_square_calculator.calculate_wasserstein_difference(count_rows_array, alignment_array, wasserstein, permutated_per_row_chi2)
             initial_global_chi2 = wasserstein
-        elif self.pruning_algorithm == 'squared':
-            initial_global_chi2 = self.chi_square_calculator.calculate_squared_row_global_chi2(expected_observed, count_rows_array)
-            chi2_differences = self.chi_square_calculator.calculate_squared_chi2_difference(count_rows_array, alignment_array, initial_global_chi2)
+        elif self.pruning_algorithm == 'quartic':
+            initial_global_chi2 = self.chi_square_calculator.calculate_quartic_row_global_chi2(expected_observed, count_rows_array)
+            chi2_differences = self.chi_square_calculator.calculate_quartic_chi2_difference(count_rows_array, alignment_array, initial_global_chi2)
         else:
             raise ValueError(f"Unknown pruning algorithm: {self.pruning_algorithm}")
 

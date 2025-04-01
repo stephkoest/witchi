@@ -58,36 +58,13 @@ class ChiSquareCalculator:
 
         return wasserstein
 
-    def calculate_squared_row_global_chi2(self, expected_values, count_rows_array):
+    def calculate_quartic_row_global_chi2(self, expected_values, count_rows_array):
         """Calculate the chi-squared score for all taxa."""
         chi2_values = (count_rows_array - expected_values) ** 2 / expected_values
         chi2_sum = np.sum(chi2_values, axis=0)
-        squared_chi2_sum = np.sum(chi2_sum ** 2)
+        quartic_chi2_sum = np.sum(chi2_sum ** 2)
 
-        return squared_chi2_sum
-
-    def calculate_perm_outlyingness(self,per_row_chi2, median_perm_chi2, mad_perm_chi2):
-        """
-        Calculates outlyingness for per_row_chi2 values using Median Absolute Deviation (MAD).
-
-        Parameters:
-        per_row_chi2 (numpy array): Array of chi-squared values for each row.
-
-        Returns:
-        numpy array: Outlyingness scores based on MAD.
-        """
-
-        # Calculate the outlyingness based on MAD
-        outlyingness = np.abs(per_row_chi2 - median_perm_chi2) / mad_perm_chi2
-
-        return outlyingness
-
-    def calculate_row_chi2_outlyingness_sum(self, expected_values, count_rows_array, median_perm_chi2, mad_perm_chi2):
-        """Calculate the chi-squared score for all taxa."""
-        per_row_chi2 = self.calculate_row_chi2(expected_values, count_rows_array)
-        outlyingness_sum = np.sum(self.calculate_perm_outlyingness(per_row_chi2, median_perm_chi2, mad_perm_chi2))
-
-        return outlyingness_sum
+        return quartic_chi2_sum
 
     def calculate_global_chi2_difference(self, count_rows_array, alignment_array, initial_global_chi2):
         """Calculate the chi-squared difference for each column based on its impact on the overall chi-squared score."""
@@ -131,15 +108,15 @@ class ChiSquareCalculator:
 
         return dict(enumerate(chi2_differences))
 
-    def calculate_squared_chi2_difference(self, count_rows_array, alignment_array, initial_global_chi2):
+    def calculate_quartic_chi2_difference(self, count_rows_array, alignment_array, initial_global_chi2):
         """Calculate the chi-squared difference for each column based on its impact on the squared chi-squared score of rows."""
-        def compute_squared_difference(col_idx):
+        def compute_quartic_difference(col_idx):
             col_count = count_rows_array - self.calculate_row_counts(alignment_array[:, col_idx, np.newaxis])
-            return self.calculate_squared_row_global_chi2(self.calculate_expected_observed(col_count), col_count)
+            return self.calculate_quartic_row_global_chi2(self.calculate_expected_observed(col_count), col_count)
 
         chi2_differences = initial_global_chi2 - np.array(
             Parallel(n_jobs=self.num_workers)(
-                delayed(compute_squared_difference)(col_idx) for col_idx in range(alignment_array.shape[1]))
+                delayed(compute_quartic_difference)(col_idx) for col_idx in range(alignment_array.shape[1]))
         )
 
         return dict(enumerate(chi2_differences))

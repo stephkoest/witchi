@@ -17,8 +17,8 @@ def main():
                               help='Number of parallel workers (cores) to use, default is 2.\nScales poorly with more than 4 workers.')
     prune_parser.add_argument('--top_n', type=int, default=1,
                               help='Number of top delta-chi2 columns to remove. Default is 1.')
-    prune_parser.add_argument('--pruning_algorithm', default='squared',
-                              help='Pruning algorithm to use: global, outlyingness, wasserstein, squared')
+    prune_parser.add_argument('--pruning_algorithm', default='quartic',
+                              help='Pruning algorithm to use: squared, quartic, wasserstein')
     # add touchdown
     prune_parser.add_argument('--touchdown', type=bool, default=False, help='Touchdown mode, if True, the number of '
                                                                             'columns to prune will be reduced to 5 '
