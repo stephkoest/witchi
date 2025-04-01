@@ -10,6 +10,10 @@ class ChiSquareCalculator:
     def calculate_row_counts(self, alignment_array):
         """Count occurrences of all characters in the provided char_set for each column of the alignment array, ignoring gaps ('-')."""
         count_rows_array = np.array([(alignment_array == char).sum(axis=1) for char in self.char_set])
+        if np.any(count_rows_array == 0):
+            # Avoid division by zero
+            count_rows_array = count_rows_array + 1
+
         return count_rows_array
 
     def calculate_expected_observed(self, count_rows_array):
@@ -19,6 +23,9 @@ class ChiSquareCalculator:
         global_frequencies = total_chars / total_chars_sum
         column_totals = np.sum(count_rows_array, axis=0, keepdims=True)
         expected_frequencies = global_frequencies[:, np.newaxis] * column_totals
+        if np.any(expected_frequencies == 0):
+            # Avoid division by zero
+            expected_frequencies = expected_frequencies + 1
 
         return expected_frequencies
 
