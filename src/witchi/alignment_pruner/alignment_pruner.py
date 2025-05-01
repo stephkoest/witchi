@@ -130,12 +130,7 @@ class AlignmentPruner:
                     if self.top_n > 5:
                         self.top_n = 5
 
-            if significant_count == 0: #quit when no significant taxa are left
-                #if self.pruning_algorithm == 'global':
-                print(f"Pruning complete. Exiting because of taxa p-value.")
-                self.top_n = initial_topn
-                break
-            if alignment_pseudopvalue >= 0.94:
+            if alignment_pseudopvalue >= 0.95:
                 #if self.pruning_algorithm == 'global':
                 print(f"Pruning complete. Exiting because of alignment p-value.")
                 self.top_n = initial_topn
@@ -163,6 +158,12 @@ class AlignmentPruner:
                   f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
                   f"q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f} | "
                   f"Alignment p-value: {alignment_pseudopvalue:.2f}")
+
+            if significant_count == 0: #quit when no significant taxa are left
+                #if self.pruning_algorithm == 'global':
+                print(f"Pruning complete. Exiting because of taxa p-value.")
+                self.top_n = initial_topn
+                break
 
         score_dict["after_real"] = per_row_chi2
 
