@@ -152,7 +152,7 @@ class AlignmentPruner:
             alignment_array = np.delete(alignment_array, top_n_indices, axis=1)
             count_rows_array = self.chi_square_calculator.calculate_row_counts(alignment_array)
             original_indices = [i for j, i in enumerate(original_indices) if j not in top_n_indices]
-            iteration += 1
+
             print(f"Columns removed: {removed_columns_count}, {(removed_columns_count / alignment_size) * 100:.2f}% | "
                   f"Biased taxa permutation: {significant_count} | "
                   f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
@@ -164,6 +164,7 @@ class AlignmentPruner:
                 print(f"Pruning complete. Exiting because of taxa p-value.")
                 self.top_n = initial_topn
                 break
+            iteration += 1
 
         score_dict["after_real"] = per_row_chi2
 
