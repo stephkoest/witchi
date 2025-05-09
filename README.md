@@ -5,7 +5,7 @@ WitChi is a sophisticated alignment pruning tool designed to reduce compositiona
 
 ## Key Features
 * **Recursive Chi-Square Pruning**: Iteratively removes biased columns based on Chi-square statistics.
-* **Multiple Pruning Algorithms**: Supports global, outlyingness, Wasserstein, and squared delta Chi-square pruning.
+* **Multiple Pruning Algorithms**: Supports squared, Wasserstein, and quartic delta Chi-square pruning.
 * **Permutation-Based Thresholding**: Empirically estimates unbiased Chi-square score distributions using permutation tests.
 * **Parallel Processing**: Leverages multi-threading for computational efficiency.
 * **Modular Design**: Perform only pruning or permutation testing depending on your analysis goals.
@@ -45,7 +45,7 @@ python -m unittest discover -s tests -p 'test_witchi.py'
 Prune alignment columns recursively based on Chi-square test:
 
 ```bash
-witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --permutations 100 --num_workers 4 --top_n 3 --pruning_algorithm wasserstein
+witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --permutations 100 --num_workers 4 --top_n 2 --pruning_algorithm quartic
 ```
 
 #### Options:
@@ -55,7 +55,7 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--permutations`: Number of permutations for empirical distribution (default: 100).
 - `--num_workers`: Number of CPU threads for parallelization (default: 2).
 - `--top_n`: Number of top biased columns to prune per iteration (default: 1).
-- `--pruning_algorithm`: Pruning algorithm to use (global, outlyingness, wasserstein, squared).
+- `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic).
 
 ### Permutation Testing
 Run permutation tests to establish empirical Chi-square distributions:
@@ -71,9 +71,9 @@ witchi test --file alignment.fasta --format fasta --num_workers 4 --permutations
 - `--create_output`: Flag to create output file with z-scores and pseudo p-values per taxon.
 
 ## Pruning Algorithms
-- **Global Pruning**: Prioritizes columns with the highest global delta Chi-square score.
+- **Squared Pruning**: Prioritizes columns with the highest delta Chi-square score.
 - **Wasserstein Pruning**: Guides pruning by minimizing Wasserstein distance to the unbiased distribution.
-- **Squared Pruning**: Targets columns that maximize squared Chi-square score differences.
+- **Quartic Pruning**: Targets columns that maximize squared taxon delta Chi-square score differences.
 
 ## Output
 - Pruned Alignment File: A new alignment file with reduced bias.
