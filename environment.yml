@@ -11,5 +11,7 @@ dependencies:
   - seaborn
   - matplotlib
   - gnuplot
+  - pytest
   - pip:
      - "--editable=git+https://github.com/dkogan/gnuplotlib.git#egg=gnuplotlib"
+     - pre-commit
