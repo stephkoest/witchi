@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class SequenceTypeDetector:
     DNA_BASES = np.array(list("ACGT"))
     AMINO_ACIDS = np.array(list("ACDEFGHIKLMNPQRSTVWY"))
@@ -10,7 +11,7 @@ class SequenceTypeDetector:
 
     def detect_sequence_type(self, alignment):
         """Detect whether the alignment is DNA or Protein based on sequence characters."""
-        chars_to_remove = {'N', 'n', '-', '?', 'X', 'x', '.'}
+        chars_to_remove = {"N", "n", "-", "?", "X", "x", "."}
         seq_set = set()
 
         for record in alignment:

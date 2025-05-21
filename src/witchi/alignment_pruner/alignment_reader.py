@@ -1,8 +1,9 @@
 import numpy as np
 from Bio import AlignIO
 
+
 class AlignmentReader:
-    def __init__(self, file, format='fasta'):
+    def __init__(self, file, format="fasta"):
         self.file = file
         self.format = format
 

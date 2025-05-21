@@ -86,16 +86,16 @@ witchi test --file alignment.fasta --format fasta --num_workers 4 --permutations
   * The alignment file is parsed and converted to a NumPy array.
 
 **2. Empirical Thresholds:**
-    
+
   * Permutation tests generate expected Chi-square score distributions.
 
 **3. Pruning Loop:**
-    
+
   * Iteratively removes the most biased columns based on the selected algorithm.
   * Monitors progress using metrics like Wasserstein distance.
 
 **4. Final Output:**
-    
+
   * Produces a pruned alignment and statistical summaries.
 
 ## Example Workflow
