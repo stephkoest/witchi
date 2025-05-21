@@ -1,0 +1,17 @@
+# Python cache and bytecode
+__pycache__/
+*.pyc
+
+# PyCharm project files
+.idea/
+
+# Conda environment files
+*.conda
+witchi-env/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+
+# MacOS
+.DS_Store
