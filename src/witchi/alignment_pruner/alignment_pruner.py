@@ -36,9 +36,6 @@ class AlignmentPruner:
         self.touchdown = touchdown
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
-        self.is_dna = None
-        self.aa_significance_level = 30.143527
-        self.dna_significance_level = 7.814728
         self.chi_square_calculator = None
 
     def run(self):
@@ -49,9 +46,6 @@ class AlignmentPruner:
 
         is_dna, char_set = SequenceTypeDetector.detect(alignment)
 
-        self.significance_level = (
-            self.dna_significance_level if self.is_dna else self.aa_significance_level
-        )
         self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
         self.permutation_test = PermutationTest(self.num_workers, self.permutations)
         sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
