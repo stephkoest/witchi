@@ -5,26 +5,31 @@ class SequenceTypeDetector:
     DNA_BASES = np.array(list("ACGT"))
     AMINO_ACIDS = np.array(list("ACDEFGHIKLMNPQRSTVWY"))
 
-    def __init__(self):
-        self.is_dna = None
-        self.char_set = None
-
-    def detect_sequence_type(self, alignment):
-        """Detect whether the alignment is DNA or Protein based on sequence characters."""
+    @staticmethod
+    def detect(alignment):
         chars_to_remove = {"N", "n", "-", "?", "X", "x", "."}
         seq_set = set()
 
         for record in alignment:
             seq_set.update(list(str(record.seq.upper())))
 
-        for char in chars_to_remove:
-            seq_set.discard(char)
+        seq_set -= chars_to_remove
 
-        if seq_set.issubset(self.DNA_BASES):
-            self.is_dna = True
-            self.char_set = self.DNA_BASES
+        if not seq_set:
+            print(
+                "⚠️  Could not detect sequence type: all residues were ambiguous or removed."
+            )
+            raise ValueError("No valid sequence characters detected.")
+
+        if seq_set.issubset(SequenceTypeDetector.DNA_BASES):
             print("Detected DNA sequence.")
+            return True, SequenceTypeDetector.DNA_BASES
+
+        elif seq_set.issubset(SequenceTypeDetector.AMINO_ACIDS):
+            print("Detected amino acid sequence.")
+            return False, SequenceTypeDetector.AMINO_ACIDS
+
         else:
-            self.is_dna = False
-            self.char_set = self.AMINO_ACIDS
-            print("Detected Protein sequence.")
+            print(f"⚠️  Sequence contains unexpected characters: {sorted(seq_set)}")
+            print("Defaulting to amino acid interpretation.")
+            return False, SequenceTypeDetector.AMINO_ACIDS

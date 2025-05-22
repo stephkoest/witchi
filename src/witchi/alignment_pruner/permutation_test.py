@@ -89,10 +89,9 @@ class PermutationTest:
         reader = AlignmentReader(alignment_file, alignment_format)
         alignment, alignment_array = reader.run()
         detector = SequenceTypeDetector()
-        detector.detect_sequence_type(alignment)
+        is_dna, char_set = detector.detect(alignment)
         self.alignment = alignment
-        self.is_dna = detector.is_dna
-        char_set = detector.char_set
+
         self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
         sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
             self.run(alignment_array, self.chi_square_calculator)

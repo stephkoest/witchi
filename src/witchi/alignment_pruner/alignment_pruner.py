@@ -47,10 +47,7 @@ class AlignmentPruner:
         reader = AlignmentReader(self.file, self.format)
         alignment, alignment_array = reader.run()
 
-        detector = SequenceTypeDetector()
-        detector.detect_sequence_type(alignment)
-        self.is_dna = detector.is_dna
-        char_set = detector.char_set
+        is_dna, char_set = SequenceTypeDetector.detect(alignment)
 
         self.significance_level = (
             self.dna_significance_level if self.is_dna else self.aa_significance_level
