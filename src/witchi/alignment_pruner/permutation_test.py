@@ -109,7 +109,7 @@ class PermutationTest:
         print(
             f"Alignment chi2score: {(np.sum(per_row_chi2)):.2f} | "
             f"Permutations alignment chi2scores: {(min(sums)):.2f} - {(max(sums)):.2f} | "
-            f"Pseudo-P: {self.calc_pseudo_pvalue(np.sum(per_row_chi2),sums)[0] }"
+            f"Empirical-P: {self.calc_pseudo_pvalue(np.sum(per_row_chi2),sums)[0] }"
         )
         print(
             f"Alignment mean taxa chi2score: {(np.mean(per_row_chi2)):.2f} | "
@@ -130,7 +130,7 @@ class PermutationTest:
         ]
 
         print(
-            f"Biased Taxa based on corrected pseudo-p-values: {len(significant_list)} of {np.shape(per_row_chi2)[0]}"
+            f"Biased Taxa based on corrected empirical-P-values: {len(significant_list)} of {np.shape(per_row_chi2)[0]}"
         )
         if create_output:
             # remove file general file extension after last point (could be fasta or other)
@@ -200,7 +200,7 @@ class PermutationTest:
 
         with open(file_name, "w", newline="") as tsvfile:
             writer = csv.writer(tsvfile, delimiter="\t")
-            writer.writerow(["Row", "Pseudo-Pvalue", "Z-Score"])
+            writer.writerow(["Row", "Empirical-Pvalue", "Z-Score"])
             for row, values in sorted_dict.items():
                 writer.writerow([row, values["pseudo_pvalue"], values["zscore"]])
 

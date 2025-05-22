@@ -84,17 +84,20 @@ class AlignmentPruner:
             ".fasta", "_score_dict.tsv"
         )
         # something to clean later, reintegrate into the main function
-        pseudo_pvalues = self.permutation_test.calc_pseudo_pvalue(
+        empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
             score_dict["after_real"], permutated_per_row_chi2
         )
-        row_pseudo_pvalue_dict = self.permutation_test.make_score_dict(
-            score_dict["after_real"], permutated_per_row_chi2, pseudo_pvalues, alignment
+        row_empirical_pvalue_dict = self.permutation_test.make_score_dict(
+            score_dict["after_real"],
+            permutated_per_row_chi2,
+            empirical_pvalues,
+            alignment,
         )
         output_score_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_scores.tsv"
         )
         self.permutation_test.write_score_dict_to_tsv(
-            row_pseudo_pvalue_dict, output_score_tsv_file
+            row_empirical_pvalue_dict, output_score_tsv_file
         )
         # NOW MAKE JSON
         output_json_file = os.path.splitext(self.file)[0] + suffix.replace(
@@ -200,11 +203,11 @@ class AlignmentPruner:
                 score_dict["before_permuted"] = permutated_per_row_chi2
                 score_dict["before_real"] = per_row_chi2
 
-            pseudo_pvalues = self.permutation_test.calc_pseudo_pvalue(
+            empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
                 per_row_chi2, permutated_per_row_chi2
             )
-            significant_count = sum(p <= 0.05 for p in pseudo_pvalues)
-            alignment_pseudopvalue = self.permutation_test.calc_pseudo_pvalue(
+            significant_count = sum(p <= 0.05 for p in empirical_pvalues)
+            alignment_empiricalpvalue = self.permutation_test.calc_empirical_pvalue(
                 np.sum(per_row_chi2), sums
             )[0]
 
@@ -213,7 +216,7 @@ class AlignmentPruner:
                     if self.top_n > 5:
                         self.top_n = 5
 
-            if alignment_pseudopvalue >= 0.95:
+            if alignment_empiricalpvalue >= 0.95:
                 print("Pruning complete. Exiting because of alignment p-value.")
                 break
 
@@ -253,7 +256,7 @@ class AlignmentPruner:
                 f"Biased taxa permutation: {significant_count} | "
                 f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
                 f"q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f} | "
-                f"Alignment p-value: {alignment_pseudopvalue:.2f}"
+                f"Alignment p-value: {alignment_empiricalpvalue:.2f}"
             )
 
             if significant_count == 0:
