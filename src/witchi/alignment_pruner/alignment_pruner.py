@@ -1,15 +1,19 @@
 import numpy as np
 import os
-import csv
 import time
 from Bio.Seq import Seq
 from Bio.Align import MultipleSeqAlignment
-from Bio import AlignIO
 
 from .chi_square_calculator import ChiSquareCalculator
 from .permutation_test import PermutationTest
 from .sequence_type_detector import SequenceTypeDetector
 from .alignment_reader import AlignmentReader
+from .utils import (
+    write_alignment,
+    write_pruned_dict_to_tsv,
+    write_score_dict_to_json,
+    write_score_dict_to_tsv,
+)
 
 
 class AlignmentPruner:
@@ -77,8 +81,8 @@ class AlignmentPruner:
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", ".tsv"
         )
-        self.write_alignment(pruned_alignment, output_alignment_pruned_file)
-        self.write_pruned_dict_to_tsv(prune_dict, output_tsv_file)
+        write_alignment(pruned_alignment, output_alignment_pruned_file)
+        write_pruned_dict_to_tsv(prune_dict, output_tsv_file, self.pruning_algorithm)
 
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_score_dict.tsv"
@@ -96,14 +100,12 @@ class AlignmentPruner:
         output_score_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_scores.tsv"
         )
-        self.permutation_test.write_score_dict_to_tsv(
-            row_empirical_pvalue_dict, output_score_tsv_file
-        )
+        write_score_dict_to_tsv(row_empirical_pvalue_dict, output_score_tsv_file)
         # NOW MAKE JSON
         output_json_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_score_dict.json"
         )
-        self.permutation_test.write_score_dict_to_json(score_dict, output_json_file)
+        write_score_dict_to_json(score_dict, output_json_file)
         print(f"Pruned {len(prune_dict.keys())} columns.")
         print(f"Pruned alignment saved to {output_alignment_pruned_file}")
         print(f"Columns pruned in order saved to: {output_tsv_file}")
@@ -280,33 +282,3 @@ class AlignmentPruner:
             pruned_sequences.append(record)
 
         return pruned_sequences
-
-    def write_alignment(self, alignment, output_file):
-        """Write the pruned alignment to a file."""
-        with open(output_file, "w") as output_handle:
-            AlignIO.write(alignment, output_handle, self.format)
-
-    def write_pruned_dict_to_tsv(self, dictionary, file_name):
-        headers = [
-            "Iteration",
-            "Original Index",
-            "Global ChiScore",
-            "Initial Significant ChiScore",
-            "ChiScore Difference",
-            "Significant taxa",
-            "Algorithm",
-        ]
-        with open(file_name, "w", newline="") as tsvfile:
-            writer = csv.DictWriter(tsvfile, fieldnames=headers, delimiter="\t")
-            writer.writeheader()
-            for col, values in dictionary.items():
-                row = {
-                    "Iteration": values[0],
-                    "Original Index": values[1],
-                    "Global ChiScore": values[2],
-                    "Initial Significant ChiScore": values[3],
-                    "ChiScore Difference": values[4],
-                    "Significant taxa": values[5],
-                    "Algorithm": self.pruning_algorithm,
-                }
-                writer.writerow(row)
