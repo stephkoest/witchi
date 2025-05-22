@@ -33,9 +33,7 @@ class PermutationTest:
 
         return empirical_p_list
 
-    def run(self, alignment_array, chi_square_calculator):
-        """Run the permutation test and get chi-squared score percentiles and distribution."""
-
+    def _permute_and_calculate_chi2(self, alignment_array, chi_square_calculator):
         def permute_single_calculate_chi2(i):
             iter_seed = 12345 + i
             rng = np.random.default_rng(iter_seed)
@@ -51,12 +49,18 @@ class PermutationTest:
             )
             return per_row_chi2
 
-        print(f"Running {self.permutations} permutations.")
-        permutated_per_row_chi2 = Parallel(n_jobs=self.num_workers)(
+        results = Parallel(n_jobs=self.num_workers)(
             delayed(permute_single_calculate_chi2)(i) for i in range(self.permutations)
         )
+        return np.array(results)
 
-        permutated_per_row_chi2 = np.array(permutated_per_row_chi2)
+    def run(self, alignment_array, chi_square_calculator):
+        """Run the permutation test and get chi-squared score percentiles and distribution."""
+        print(f"Running {self.permutations} permutations.")
+        permutated_per_row_chi2 = self._permute_and_calculate_chi2(
+            alignment_array, chi_square_calculator
+        )
+
         maxes = np.max(permutated_per_row_chi2, axis=1)
         # gett sums for every permutation
         sums = np.sum(permutated_per_row_chi2, axis=1)
