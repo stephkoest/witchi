@@ -36,6 +36,8 @@ def write_pruned_dict_to_tsv(dictionary, file_name, algorithm):
 
 
 def write_score_dict_to_json(dictionary, file_name):
+    """Write the score dictionary to a JSON file."""
+
     def convert_ndarray(obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
@@ -46,11 +48,15 @@ def write_score_dict_to_json(dictionary, file_name):
 
 
 def write_score_dict_to_tsv(dictionary, file_name):
+    """Write the score dictionary to a TSV file, ordered by descending absolute z-score."""
     sorted_dict = dict(
         sorted(
-            dictionary.items(), key=lambda item: abs(item[1]["zscore"]), reverse=True
+            dictionary.items(),
+            key=lambda item: abs(item[1]["zscore"]),
+            reverse=True,
         )
     )
+
     with open(file_name, "w", newline="") as tsvfile:
         writer = csv.writer(tsvfile, delimiter="\t")
         writer.writerow(["Row", "Empirical-Pvalue", "Z-Score"])

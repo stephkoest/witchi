@@ -1,7 +1,7 @@
-import json
 import numpy as np
 from joblib import Parallel, delayed
-import csv
+
+from .utils import write_score_dict_to_tsv
 
 
 class PermutationTest:
@@ -143,7 +143,7 @@ class PermutationTest:
             output_tsv_file = alignment_file.replace(
                 "." + alignment_file.split(".")[-1], "_scores.tsv"
             )
-            self.write_score_dict_to_tsv(row_empirical_pvalue_dict, output_tsv_file)
+            write_score_dict_to_tsv(row_empirical_pvalue_dict, output_tsv_file)
             print(f"Printing taxa p-values and z-scores to file: {output_tsv_file}")
             # still print the top 5 z-score taxa to console
             print("Top 5 taxa z-scores and corresponding empirical p-values:")
@@ -162,7 +162,7 @@ class PermutationTest:
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Execution time for testing: {elapsed_time:.2f} seconds")
-        # self.write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
+        # write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
 
     def make_score_dict(
         self, per_row_chi2, permutated_per_row_chi2, empirical_pvalues, alignment
@@ -194,31 +194,3 @@ class PermutationTest:
         )
 
         return row_empirical_pvalue_dict
-
-    def write_score_dict_to_tsv(self, dictionary, file_name):
-        """Write the score dictionary to a TSV file, ordered by descending absolute z-score."""
-        # Sort the dictionary by descending absolute z-score
-        sorted_dict = dict(
-            sorted(
-                dictionary.items(),
-                key=lambda item: abs(item[1]["zscore"]),
-                reverse=True,
-            )
-        )
-
-        with open(file_name, "w", newline="") as tsvfile:
-            writer = csv.writer(tsvfile, delimiter="\t")
-            writer.writerow(["Row", "Empirical-Pvalue", "Z-Score"])
-            for row, values in sorted_dict.items():
-                writer.writerow([row, values["empirical_pvalue"], values["zscore"]])
-
-    def write_score_dict_to_json(self, dictionary, file_name):
-        """Write the score dictionary to a JSON file."""
-
-        def convert_ndarray(obj):
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-        with open(file_name, "w") as jsonfile:
-            json.dump(dictionary, jsonfile, indent=4, default=convert_ndarray)
