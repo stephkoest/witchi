@@ -179,18 +179,13 @@ class AlignmentPruner:
         sd_perm_chi2 = np.std(permutated_per_row_chi2)
 
         while removed_columns_count < self.max_residue_pruned:
-            count_rows_array = self.chi_square_calculator.calculate_row_counts(
-                alignment_array
-            )
-            expected_observed = self.chi_square_calculator.calculate_expected_observed(
-                count_rows_array
-            )
-            per_row_chi2 = self.chi_square_calculator.calculate_row_chi2(
-                expected_observed, count_rows_array
-            )
-            per_row_chi2_median = np.median(per_row_chi2)
-            upper_chi_quantile = np.percentile(per_row_chi2, 95)
-            global_chi2 = np.sum(per_row_chi2)
+            stats = self._calculate_per_row_stats(alignment_array)
+            count_rows_array = stats["count_rows"]
+            expected_observed = stats["expected_observed"]
+            per_row_chi2 = stats["per_row_chi2"]
+            per_row_chi2_median = stats["median"]
+            upper_chi_quantile = stats["q95"]
+            global_chi2 = stats["sum"]
 
             if iteration == 0:
                 score_dict["before_permuted"] = permutated_per_row_chi2
@@ -237,9 +232,7 @@ class AlignmentPruner:
                 removed_columns_count += 1
 
             alignment_array = np.delete(alignment_array, top_n_indices, axis=1)
-            count_rows_array = self.chi_square_calculator.calculate_row_counts(
-                alignment_array
-            )
+
             original_indices = [
                 i for j, i in enumerate(original_indices) if j not in top_n_indices
             ]
@@ -262,6 +255,28 @@ class AlignmentPruner:
         score_dict["after_real"] = per_row_chi2
 
         return alignment_array, prune_dict, score_dict
+
+    def _calculate_per_row_stats(self, alignment_array):
+        """Calculate row-wise chi² statistics and summary metrics."""
+        count_rows_array = self.chi_square_calculator.calculate_row_counts(
+            alignment_array
+        )
+        expected_observed = self.chi_square_calculator.calculate_expected_observed(
+            count_rows_array
+        )
+        per_row_chi2 = self.chi_square_calculator.calculate_row_chi2(
+            expected_observed, count_rows_array
+        )
+
+        return {
+            "count_rows": count_rows_array,
+            "expected_observed": expected_observed,
+            "per_row_chi2": per_row_chi2,
+            "median": np.median(per_row_chi2),
+            "mean": np.mean(per_row_chi2),
+            "q95": np.percentile(per_row_chi2, 95),
+            "sum": np.sum(per_row_chi2),
+        }
 
     def update_sequences(self, alignment, pruned_alignment_array):
         """Update sequences with pruned alignments."""
