@@ -37,6 +37,11 @@ class AlignmentPruner:
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
         self.chi_square_calculator = None
+        self.prune_strategies = {
+            "squared": self._prune_squared,
+            "quartic": self._prune_quartic,
+            "wasserstein": self._prune_wasserstein,
+        }
 
     def run(self):
         """Main method to run the recursive chi-square pruning."""
@@ -109,43 +114,50 @@ class AlignmentPruner:
         count_rows_array,
         permutated_per_row_chi2,
     ):
-        if self.pruning_algorithm == "squared":
-            initial_global_chi2 = self.chi_square_calculator.calculate_global_chi2(
-                expected_observed, count_rows_array
+        try:
+            return self.prune_strategies[self.pruning_algorithm](
+                alignment_array,
+                expected_observed,
+                count_rows_array,
+                permutated_per_row_chi2,
             )
-            chi2_differences = (
-                self.chi_square_calculator.calculate_global_chi2_difference(
-                    count_rows_array, alignment_array, initial_global_chi2
-                )
-            )
-        elif self.pruning_algorithm == "wasserstein":
-            wasserstein = self.chi_square_calculator.calculate_row_chi2_wasserstein(
-                expected_observed, count_rows_array, permutated_per_row_chi2
-            )
-            chi2_differences = (
-                self.chi_square_calculator.calculate_wasserstein_difference(
-                    count_rows_array,
-                    alignment_array,
-                    wasserstein,
-                    permutated_per_row_chi2,
-                )
-            )
-            initial_global_chi2 = wasserstein
-        elif self.pruning_algorithm == "quartic":
-            initial_global_chi2 = (
-                self.chi_square_calculator.calculate_quartic_row_global_chi2(
-                    expected_observed, count_rows_array
-                )
-            )
-            chi2_differences = (
-                self.chi_square_calculator.calculate_quartic_chi2_difference(
-                    count_rows_array, alignment_array, initial_global_chi2
-                )
-            )
-        else:
+        except KeyError:
             raise ValueError(f"Unknown pruning algorithm: {self.pruning_algorithm}")
 
+    def _prune_squared(self, alignment_array, expected_observed, count_rows_array, *_):
+        initial_global_chi2 = self.chi_square_calculator.calculate_global_chi2(
+            expected_observed, count_rows_array
+        )
+        chi2_differences = self.chi_square_calculator.calculate_global_chi2_difference(
+            count_rows_array, alignment_array, initial_global_chi2
+        )
         return initial_global_chi2, chi2_differences
+
+    def _prune_quartic(self, alignment_array, expected_observed, count_rows_array, *_):
+        initial_global_chi2 = (
+            self.chi_square_calculator.calculate_quartic_row_global_chi2(
+                expected_observed, count_rows_array
+            )
+        )
+        chi2_differences = self.chi_square_calculator.calculate_quartic_chi2_difference(
+            count_rows_array, alignment_array, initial_global_chi2
+        )
+        return initial_global_chi2, chi2_differences
+
+    def _prune_wasserstein(
+        self,
+        alignment_array,
+        expected_observed,
+        count_rows_array,
+        permutated_per_row_chi2,
+    ):
+        wasserstein = self.chi_square_calculator.calculate_row_chi2_wasserstein(
+            expected_observed, count_rows_array, permutated_per_row_chi2
+        )
+        chi2_differences = self.chi_square_calculator.calculate_wasserstein_difference(
+            count_rows_array, alignment_array, wasserstein, permutated_per_row_chi2
+        )
+        return wasserstein, chi2_differences
 
     def recursive_prune(
         self,
