@@ -51,17 +51,12 @@ class AlignmentPruner:
         sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
             self.permutation_test.run(alignment_array, self.chi_square_calculator)
         )
-        median_perm_chi2 = np.median(permutated_per_row_chi2)
-        mad_perm_chi2 = np.median(np.abs(permutated_per_row_chi2 - median_perm_chi2))
+
         pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(
             alignment_array,
             sums,
-            maxes,
-            upper_box_threshold,
             upper_threshold,
             permutated_per_row_chi2,
-            median_perm_chi2,
-            mad_perm_chi2,
         )
 
         pruned_sequences = self.update_sequences(alignment, pruned_alignment_array)
@@ -112,10 +107,7 @@ class AlignmentPruner:
         alignment_array,
         expected_observed,
         count_rows_array,
-        sums,
         permutated_per_row_chi2,
-        upper_box_threshold,
-        upper_threshold,
     ):
         if self.pruning_algorithm == "squared":
             initial_global_chi2 = self.chi_square_calculator.calculate_global_chi2(
@@ -159,12 +151,8 @@ class AlignmentPruner:
         self,
         alignment_array,
         sums,
-        maxes,
-        upper_box_threshold,
         upper_threshold,
         permutated_per_row_chi2,
-        median_perm_chi2,
-        mad_perm_chi2,
     ):
         """Recursively prune the alignment array."""
         prune_dict = {}
@@ -233,10 +221,7 @@ class AlignmentPruner:
                 alignment_array,
                 expected_observed,
                 count_rows_array,
-                sums,
                 permutated_per_row_chi2,
-                upper_box_threshold,
-                upper_threshold,
             )
 
             # Sort the columns by the chi2 difference and get the top n columns to prune
