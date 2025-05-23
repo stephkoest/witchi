@@ -172,40 +172,61 @@ class AlignmentPruner:
         iteration = 0
         removed_columns_count = 0
         alignment_size = alignment_array.shape[1]
-        initial_topn = self.top_n
         original_indices = list(range(alignment_array.shape[1]))
 
         mean_perm_chi2 = np.mean(permutated_per_row_chi2)
         sd_perm_chi2 = np.std(permutated_per_row_chi2)
+        top_n_indices = []
+        initial_global_chi2 = None
+        chi2_differences = {}
 
         while removed_columns_count < self.max_residue_pruned:
             stats = self._calculate_per_row_stats(alignment_array)
             count_rows_array = stats["count_rows"]
             expected_observed = stats["expected_observed"]
             per_row_chi2 = stats["per_row_chi2"]
-            per_row_chi2_median = stats["median"]
             upper_chi_quantile = stats["q95"]
             global_chi2 = stats["sum"]
+
+            alignment_empirical_p, significant_count = self._calc_empirical_pvals(
+                stats, sums, permutated_per_row_chi2
+            )
 
             if iteration == 0:
                 score_dict["before_permuted"] = permutated_per_row_chi2
                 score_dict["before_real"] = per_row_chi2
+            else:
+                # only write to prune_dict after the first pruning iteration
+                for col in top_n_indices:
+                    pruned_col = original_indices[col]
+                    prune_dict[pruned_col] = [
+                        iteration,
+                        pruned_col,
+                        global_chi2,
+                        initial_global_chi2,
+                        chi2_differences[col],
+                        significant_count,
+                    ]
+                    removed_columns_count += 1
 
-            empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
-                per_row_chi2, permutated_per_row_chi2
+                original_indices = [
+                    i for j, i in enumerate(original_indices) if j not in top_n_indices
+                ]
+
+            should_stop, stop_reason = self._check_stopping_criteria(
+                stats, permutated_per_row_chi2, alignment_empirical_p, significant_count
             )
-            significant_count = sum(p <= 0.05 for p in empirical_pvalues)
-            alignment_empiricalpvalue = self.permutation_test.calc_empirical_pvalue(
-                np.sum(per_row_chi2), sums
-            )[0]
 
-            if per_row_chi2_median <= upper_box_threshold:
-                if self.touchdown:
-                    if self.top_n > 5:
-                        self.top_n = 5
+            print(
+                f"Columns removed: {removed_columns_count}, {(removed_columns_count / alignment_size) * 100:.2f}% | "
+                f"Biased taxa permutation: {significant_count} | "
+                f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
+                f"q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f} | "
+                f"Alignment p-value: {alignment_empirical_p:.2f}"
+            )
 
-            if alignment_empiricalpvalue >= 0.95:
-                print("Pruning complete. Exiting because of alignment p-value.")
+            if should_stop:
+                print(f"Pruning complete. Exiting because of {stop_reason}.")
                 break
 
             initial_global_chi2, chi2_differences = self.prune(
@@ -217,44 +238,47 @@ class AlignmentPruner:
                 upper_box_threshold,
                 upper_threshold,
             )
+
             # Sort the columns by the chi2 difference and get the top n columns to prune
             top_n_indices = np.argsort(list(chi2_differences.values()))[-self.top_n :]
-            for col in top_n_indices:
-                pruned_col = original_indices[col]
-                prune_dict[pruned_col] = [
-                    iteration,
-                    pruned_col,
-                    global_chi2,
-                    initial_global_chi2,
-                    chi2_differences[col],
-                    significant_count,
-                ]
-                removed_columns_count += 1
-
             alignment_array = np.delete(alignment_array, top_n_indices, axis=1)
-
-            original_indices = [
-                i for j, i in enumerate(original_indices) if j not in top_n_indices
-            ]
-
-            print(
-                f"Columns removed: {removed_columns_count}, {(removed_columns_count / alignment_size) * 100:.2f}% | "
-                f"Biased taxa permutation: {significant_count} | "
-                f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
-                f"q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f} | "
-                f"Alignment p-value: {alignment_empiricalpvalue:.2f}"
-            )
-
-            if significant_count == 0:
-                # quit when no significant taxa are left
-                print("Pruning complete. Exiting because of taxa p-value.")
-                self.top_n = initial_topn
-                break
             iteration += 1
 
         score_dict["after_real"] = per_row_chi2
 
         return alignment_array, prune_dict, score_dict
+
+    def _check_stopping_criteria(
+        self, stats, permuted_chi2, alignment_empirical_p, significant_count
+    ):
+        """
+        Check whether pruning should stop based on empirical p-values.
+        Returns: (should_stop: bool, reason: str, significant_count: int)
+        """
+
+        if stats["median"] <= np.percentile(permuted_chi2, 75):
+            if self.touchdown and self.top_n > 5:
+                self.top_n = 5
+
+        if alignment_empirical_p >= 0.95:
+            return True, "alignment p-value"
+
+        if significant_count == 0:
+            return True, "no significant taxa"
+
+        return False, None
+
+    def _calc_empirical_pvals(self, stats, permuted_sums, permuted_chi2):
+        """Calculate empirical p-values for alignment and taxa based on chi2 and permuted chi2."""
+        alignment_empirical_p = self.permutation_test.calc_empirical_pvalue(
+            stats["sum"], permuted_sums
+        )[0]
+        empirical_pvals = self.permutation_test.calc_empirical_pvalue(
+            stats["per_row_chi2"], permuted_chi2
+        )
+        significant_count = sum(p <= 0.05 for p in empirical_pvals)
+
+        return alignment_empirical_p, significant_count
 
     def _calculate_per_row_stats(self, alignment_array):
         """Calculate row-wise chi² statistics and summary metrics."""
