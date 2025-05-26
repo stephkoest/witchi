@@ -37,6 +37,8 @@ class AlignmentPruner:
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
         self.chi_square_calculator = None
+        self.alignment_size = None
+        self.initial_top_n = self.top_n
         self.prune_strategies = {
             "squared": self._prune_squared,
             "quartic": self._prune_quartic,
@@ -171,7 +173,7 @@ class AlignmentPruner:
         score_dict = {}
         iteration = 0
         removed_columns_count = 0
-        alignment_size = alignment_array.shape[1]
+        self.alignment_size = alignment_array.shape[1]
         original_indices = list(range(alignment_array.shape[1]))
 
         mean_perm_chi2 = np.mean(permutated_per_row_chi2)
@@ -218,7 +220,8 @@ class AlignmentPruner:
             )
 
             print(
-                f"Columns removed: {removed_columns_count}, {(removed_columns_count / alignment_size) * 100:.2f}% | "
+                f"Columns removed: {removed_columns_count}, "
+                f"{(removed_columns_count / self.alignment_size) * 100:.2f}% | "
                 f"Biased taxa permutation: {significant_count} | "
                 f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
                 f"q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f} | "
@@ -242,7 +245,7 @@ class AlignmentPruner:
             iteration += 1
 
         score_dict["after_real"] = per_row_chi2
-
+        self.top_n = self.initial_top_n
         return alignment_array, prune_dict, score_dict
 
     def _check_stopping_criteria(
@@ -253,9 +256,10 @@ class AlignmentPruner:
         Returns: (should_stop: bool, reason: str, significant_count: int)
         """
 
-        if stats["median"] <= np.percentile(permuted_chi2, 75):
-            if self.touchdown and self.top_n > 5:
-                self.top_n = 5
+        if stats["median"] <= np.percentile(permuted_chi2, 99):
+            new_top_n = int(self.alignment_size / 1000)
+            if self.touchdown and self.top_n > new_top_n:
+                self.top_n = new_top_n
 
         if alignment_empirical_p >= 0.95:
             return True, "alignment p-value"
