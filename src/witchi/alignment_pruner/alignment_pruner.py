@@ -184,6 +184,7 @@ class AlignmentPruner:
         top_n_indices = []
         initial_global_chi2 = None
         chi2_differences = {}
+        print(self.touchdown)
 
         while removed_columns_count < self.max_residue_pruned:
             stats = self._calculate_per_row_stats(alignment_array)
@@ -258,11 +259,11 @@ class AlignmentPruner:
         Check whether pruning should stop based on empirical p-values.
         Returns: (should_stop: bool, reason: str, significant_count: int)
         """
-
-        if stats["median"] <= np.percentile(permuted_chi2, 99):
-            new_top_n = int(self.alignment_size / 1000)
-            if self.touchdown and self.top_n > new_top_n:
-                self.top_n = new_top_n
+        if self.touchdown:
+            if stats["median"] <= np.percentile(permuted_chi2, 99):
+                new_top_n = int(self.alignment_size / 1000)
+                if new_top_n < self.top_n:
+                    self.top_n = new_top_n
 
         if alignment_empirical_p >= 0.95:
             return True, "alignment p-value"
