@@ -68,8 +68,11 @@ class AlignmentPruner:
 
         pruned_sequences = self.update_sequences(alignment, pruned_alignment_array)
         pruned_alignment = MultipleSeqAlignment(pruned_sequences)
-
-        suffix = f"_{self.pruning_algorithm}_s{self.top_n}_pruned.fasta"
+        # add touchdown suffix if applicable
+        if self.touchdown:
+            suffix = f"_{self.pruning_algorithm}_s{self.top_n}_touchdown_pruned.fasta"
+        else:
+            suffix = f"_{self.pruning_algorithm}_s{self.top_n}_pruned.fasta"
         output_alignment_pruned_file = os.path.splitext(self.file)[0] + suffix
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", ".tsv"
