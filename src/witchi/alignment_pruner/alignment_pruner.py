@@ -25,7 +25,7 @@ class AlignmentPruner:
         permutations=100,
         num_workers=2,
         top_n=10,
-        pruning_algorithm="global",
+        pruning_algorithm="squared",
         touchdown=False,
     ):
         self.file = file
