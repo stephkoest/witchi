@@ -50,12 +50,10 @@ def main():
     # add touchdown
     prune_parser.add_argument(
         "--touchdown",
-        type=bool,
-        default=False,
-        help="Touchdown mode, if True, the number of "
-        "columns to prune will be reduced to 5 "
-        "per iteration until no columns are left "
-        "to prune.",
+        action="store_true",
+        help="If flag is set, Touchdown mode is activated. The number of "
+        "columns to prune will be reduced to 0.1% of the original alignment length "
+        "per iteration after a threshold of 99.0% is reached. ",
     )
 
     test_parser = subparsers.add_parser(
@@ -96,6 +94,7 @@ def main():
             num_workers=args.num_workers,
             top_n=args.top_n,
             pruning_algorithm=args.pruning_algorithm,
+            touchdown=args.touchdown,
         )
         pruner.run()
     elif args.command == "test":
