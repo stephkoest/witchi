@@ -13,7 +13,7 @@ class TestAlignmentPruner(unittest.TestCase):
             format="nexus",
             max_residue_pruned=100,
             permutations=100,
-            num_workers=2,
+            num_workers=1,
             top_n=1,
             pruning_algorithm="quartic",
         )
