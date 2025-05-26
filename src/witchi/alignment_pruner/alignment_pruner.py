@@ -184,7 +184,6 @@ class AlignmentPruner:
         top_n_indices = []
         initial_global_chi2 = None
         chi2_differences = {}
-        print(self.touchdown)
 
         while removed_columns_count < self.max_residue_pruned:
             stats = self._calculate_per_row_stats(alignment_array)
