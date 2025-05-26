@@ -3,6 +3,7 @@ import unittest
 from witchi.alignment_pruner.alignment_pruner import AlignmentPruner
 from witchi.alignment_pruner.permutation_test import PermutationTest
 import os
+import numpy as np
 
 
 class TestAlignmentPruner(unittest.TestCase):
@@ -65,6 +66,46 @@ class TestPermutationTest(unittest.TestCase):
         self.tester.run_test(
             alignment_file="tests/data/example.nex", alignment_format="nexus"
         )
+
+    def test_run_output_structure(self):
+        from witchi.alignment_pruner.alignment_reader import AlignmentReader
+        from witchi.alignment_pruner.sequence_type_detector import SequenceTypeDetector
+        from witchi.alignment_pruner.chi_square_calculator import ChiSquareCalculator
+
+        reader = AlignmentReader("tests/data/example.nex", "nexus")
+        alignment, alignment_array = reader.run()
+        _, char_set = SequenceTypeDetector.detect(alignment)
+        calc = ChiSquareCalculator(char_set, num_workers=1)
+
+        sums, maxes, q75, q95, flat_chi2 = self.tester.run(alignment_array, calc)
+
+        self.assertEqual(sums.ndim, 1)
+        self.assertEqual(maxes.ndim, 1)
+        self.assertIsInstance(q75, float)
+        self.assertIsInstance(q95, float)
+        self.assertEqual(flat_chi2.ndim, 1)
+
+    def test_calc_empirical_pvalue_vector_and_scalar(self):
+        observed = np.array([5, 10, 15])
+        null = np.array([1, 2, 5, 10, 20, 30])
+        pvals = self.tester.calc_empirical_pvalue(observed, null)
+        self.assertEqual(len(pvals), 3)
+        self.assertTrue(all(0 <= p for p in pvals))
+
+        single = self.tester.calc_empirical_pvalue(12, null)
+        self.assertTrue(0 <= single[0] <= 1)
+
+    def test_run_with_few_permutations(self):
+        self.tester.permutations = 2
+        from witchi.alignment_pruner.alignment_reader import AlignmentReader
+        from witchi.alignment_pruner.sequence_type_detector import SequenceTypeDetector
+        from witchi.alignment_pruner.chi_square_calculator import ChiSquareCalculator
+
+        alignment, array = AlignmentReader("tests/data/example.nex", "nexus").run()
+        _, char_set = SequenceTypeDetector.detect(alignment)
+        calc = ChiSquareCalculator(char_set, 1)
+        output = self.tester.run(array, calc)
+        self.assertEqual(len(output), 5)
 
 
 if __name__ == "__main__":
