@@ -54,7 +54,7 @@ def main():
         help="If flag is set, Touchdown mode is activated (experimental!). The number of "
         "columns to prune will be reduced to 0.1%% of the original alignment length "
         "per iteration after a threshold of 99.0%% is reached. "
-        "Consider setting top_n to around 1-5% of the original alignment length.",
+        "Consider setting top_n to around 1-2%% of the original alignment length.",
     )
 
     test_parser = subparsers.add_parser(
