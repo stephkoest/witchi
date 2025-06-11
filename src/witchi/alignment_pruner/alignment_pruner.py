@@ -180,6 +180,7 @@ class AlignmentPruner:
         original_indices = list(range(alignment_array.shape[1]))
 
         mean_perm_chi2 = np.mean(permutated_per_row_chi2)
+        median_perm_chi2 = np.median(permutated_per_row_chi2)
         sd_perm_chi2 = np.std(permutated_per_row_chi2)
         top_n_indices = []
         initial_global_chi2 = None
@@ -227,7 +228,7 @@ class AlignmentPruner:
                 f"{(removed_columns_count / self.alignment_size) * 100:.2f}% | "
                 f"Biased taxa permutation: {significant_count} | "
                 f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
-                f"q95 z-score: {(upper_chi_quantile - upper_threshold) / (upper_threshold - mean_perm_chi2):.2f} | "
+                f"q95 deviation: {(upper_chi_quantile - upper_threshold) / (upper_threshold - median_perm_chi2):.2f} | "
                 f"Alignment p-value: {alignment_empirical_p:.2f}"
             )
 
