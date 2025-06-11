@@ -98,7 +98,6 @@ class PermutationTest:
         )
         mean_perm_chi2 = np.mean(permutated_per_row_chi2)
         sd_perm_chi2 = np.std(permutated_per_row_chi2)
-        median_perm_chi2 = np.median(permutated_per_row_chi2)
 
         row_counts = self.chi_square_calculator.calculate_row_counts(alignment_array)
         row_expected_observed = self.chi_square_calculator.calculate_expected_observed(
@@ -118,8 +117,8 @@ class PermutationTest:
         print(
             f"Alignment mean taxa chi2score: {(np.mean(per_row_chi2)):.2f} | "
             f"Permutations mean taxa chi2score: {(mean_perm_chi2):.2f} | "
-            f"Mean z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
-            f"q95 deviation: {(upper_chi_quantile - upper_threshold) / (upper_threshold - median_perm_chi2):.2f}"
+            f"Mean Z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
+            f"q95 Z-score: {(upper_chi_quantile - upper_threshold) / sd_perm_chi2:.2f}"
         )
         # calculate zscores and empirical p-values for each row
         empirical_pvalues = self.calc_empirical_pvalue(
