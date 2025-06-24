@@ -31,10 +31,18 @@ def main():
         help="Number of alignment permutations.",
     )
     prune_parser.add_argument(
-        "--num_workers",
+        "--num_workers_chisq",
         type=int,
-        default=2,
-        help="Number of parallel workers (cores) to use, default is 2.\nScales poorly with more than 4 workers.",
+        default=1,
+        help="Number of parallel workers (cores) to use for column delta score calculation, default is 1.\n"
+        "Scales poorly with more than 4 workers.",
+    )
+    prune_parser.add_argument(
+        "--num_workers_permute",
+        type=int,
+        default=1,
+        help="Number of parallel workers (cores) to use for permutation testing, default is 1.\n"
+        "Scales poorly with more than 4 workers.",
     )
     prune_parser.add_argument(
         "--top_n",
@@ -70,8 +78,8 @@ def main():
     test_parser.add_argument(
         "--num_workers",
         type=int,
-        default=2,
-        help="Number of parallel workers (cores) to use. (2)",
+        default=1,
+        help="Number of parallel workers (cores) to use. (1)",
     )
     test_parser.add_argument(
         "--permutations",

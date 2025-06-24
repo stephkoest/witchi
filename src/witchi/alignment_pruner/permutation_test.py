@@ -1,14 +1,14 @@
 import numpy as np
 from joblib import Parallel, delayed
 
-from .utils import write_score_dict_to_tsv
+from .utils import write_score_dict_to_tsv, make_score_dict
 
 
 class PermutationTest:
-    def __init__(self, num_workers, permutations):
+    def __init__(self, num_workers_permute, permutations):
         self.is_dna = None
         self.chi_square_calculator = None
-        self.num_workers = num_workers
+        self.num_workers = num_workers_permute
         self.permutations = permutations
 
     def calc_empirical_pvalue(self, per_row_chi2, permutated_per_row_chi2):
@@ -124,7 +124,7 @@ class PermutationTest:
         empirical_pvalues = self.calc_empirical_pvalue(
             per_row_chi2, permutated_per_row_chi2
         )
-        row_empirical_pvalue_dict = self.make_score_dict(
+        row_empirical_pvalue_dict = make_score_dict(
             per_row_chi2, permutated_per_row_chi2, empirical_pvalues, alignment
         )
         # check for significant rows
@@ -163,34 +163,3 @@ class PermutationTest:
         elapsed_time = end_time - start_time
         print(f"Execution time for testing: {elapsed_time:.2f} seconds")
         # write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
-
-    def make_score_dict(
-        self, per_row_chi2, permutated_per_row_chi2, empirical_pvalues, alignment
-    ):
-        """Make a dictionary of chi-squared scores for each row in the alignment."""
-        # Extract row names
-        per_row_chi2 = np.array(per_row_chi2)
-        row_names = [record.id for record in alignment]
-        mean_perm_chi2 = np.mean(permutated_per_row_chi2)
-        sd_perm_chi2 = np.std(permutated_per_row_chi2)
-        # Sort the dictionary by chi-squared scores in descending order
-        zscores = (per_row_chi2 - mean_perm_chi2) / sd_perm_chi2
-
-        # Calculate pvalues for each row
-        row_empirical_pvalue_dict = {
-            row_names[i]: {
-                "empirical_pvalue": empirical_pvalues[i],
-                "zscore": zscores[i],
-            }
-            for i in range(len(row_names))
-        }
-        # sort row_empirical_pvalue_dict by z-score in decending order
-        row_empirical_pvalue_dict = dict(
-            sorted(
-                row_empirical_pvalue_dict.items(),
-                key=lambda item: item[1]["zscore"],
-                reverse=True,
-            )
-        )
-
-        return row_empirical_pvalue_dict

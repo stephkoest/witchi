@@ -23,7 +23,8 @@ class AlignmentPruner:
         format="fasta",
         max_residue_pruned=100,
         permutations=100,
-        num_workers=2,
+        num_workers_chisq=1,
+        num_workers_permute=1,
         top_n=10,
         pruning_algorithm="squared",
         touchdown=False,
@@ -32,7 +33,8 @@ class AlignmentPruner:
         self.format = format
         self.max_residue_pruned = max_residue_pruned
         self.permutations = permutations
-        self.num_workers = num_workers
+        self.num_workers_chisq = num_workers_chisq
+        self.num_workers_permute = num_workers_permute
         self.touchdown = touchdown
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
@@ -53,8 +55,12 @@ class AlignmentPruner:
 
         is_dna, char_set = SequenceTypeDetector.detect(alignment)
 
-        self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
-        self.permutation_test = PermutationTest(self.num_workers, self.permutations)
+        self.chi_square_calculator = ChiSquareCalculator(
+            char_set, self.num_workers_chisq
+        )
+        self.permutation_test = PermutationTest(
+            self.num_workers_permute, self.permutations
+        )
         sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
             self.permutation_test.run(alignment_array, self.chi_square_calculator)
         )
