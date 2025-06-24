@@ -48,7 +48,8 @@ python -m unittest discover -s tests -p 'test_witchi.py'
 Prune alignment columns recursively based on Chi-square test:
 
 ```bash
-witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --permutations 100 --num_workers 4 --top_n 2 --pruning_algorithm quartic
+witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --permutations 100 \
+  --num_workers_chisq 2 --num_workers_permute 1 --top_n 2 --pruning_algorithm quartic
 ```
 
 #### Options:
@@ -56,20 +57,21 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--format`: Alignment file format (default: fasta).
 - `--max_residue_pruned`: Maximum columns to prune (default: 100).
 - `--permutations`: Number of permutations for empirical distribution (default: 100).
-- `--num_workers`: Number of CPU threads for parallelization (default: 2).
+- `--num_workers_chisq`: Number of CPU threads for chi-square calculations (default: 1).
+- `--num_workers_permute`: Number of CPU threads for permutation parallelization (default: 1).
 - `--top_n`: Number of top biased columns to prune per iteration (default: 1).
 - `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic).
 
 ### Permutation Testing
 Run permutation tests to establish empirical Chi-square distributions:
 ```bash
-witchi test --file alignment.fasta --format fasta --num_workers 4 --permutations 100
+witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --permutations 100 --create_output
 ```
 
 #### Options:
 - `--file`: Path to the alignment file.
 - `--format`: Alignment format (default: fasta).
-- `--num_workers`: Number of CPU threads (default: 2).
+- `--num_workers_permute`: Number of CPU threads (default: 1).
 - `--permutations`: Number of permutations (default: 100).
 - `--create_output`: Flag to create output file with z-scores and pseudo p-values per taxon.
 
@@ -81,7 +83,6 @@ witchi test --file alignment.fasta --format fasta --num_workers 4 --permutations
 ## Output
 - Pruned Alignment File: A new alignment file with reduced bias.
 - Statistical Reports: Summary of the pruning process, including Chi-square distributions and convergence metrics.
-- Future: Plots: Visual representation of the pruning impact on Chi-square distributions.
 
 ## How It Works
 **1. Read Alignment:**
@@ -116,6 +117,7 @@ witchi prune --file example.nex --max_residue_pruned 50 --pruning_algorithm wass
 
 ## Future Features
 Real-Time Visualization: Live plotting of distribution shifts in the terminal during pruning.
+Or maybe not.
 
 ## License
 witchi is licensed under the MIT License.
