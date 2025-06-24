@@ -62,3 +62,35 @@ def write_score_dict_to_tsv(dictionary, file_name):
         writer.writerow(["Row", "Empirical-Pvalue", "Z-Score"])
         for row, values in sorted_dict.items():
             writer.writerow([row, values["empirical_pvalue"], values["zscore"]])
+
+
+def make_score_dict(
+    per_row_chi2, permutated_per_row_chi2, empirical_pvalues, alignment
+):
+    """Make a dictionary of chi-squared scores for each row in the alignment."""
+    # Extract row names
+    per_row_chi2 = np.array(per_row_chi2)
+    row_names = [record.id for record in alignment]
+    mean_perm_chi2 = np.mean(permutated_per_row_chi2)
+    sd_perm_chi2 = np.std(permutated_per_row_chi2)
+    # Sort the dictionary by chi-squared scores in descending order
+    zscores = (per_row_chi2 - mean_perm_chi2) / sd_perm_chi2
+
+    # Calculate pvalues for each row
+    row_empirical_pvalue_dict = {
+        row_names[i]: {
+            "empirical_pvalue": empirical_pvalues[i],
+            "zscore": zscores[i],
+        }
+        for i in range(len(row_names))
+    }
+    # sort row_empirical_pvalue_dict by z-score in decending order
+    row_empirical_pvalue_dict = dict(
+        sorted(
+            row_empirical_pvalue_dict.items(),
+            key=lambda item: item[1]["zscore"],
+            reverse=True,
+        )
+    )
+
+    return row_empirical_pvalue_dict
