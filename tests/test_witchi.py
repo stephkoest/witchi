@@ -14,7 +14,8 @@ class TestAlignmentPruner(unittest.TestCase):
             format="nexus",
             max_residue_pruned=100,
             permutations=100,
-            num_workers=1,
+            num_workers_chisq=1,
+            num_workers_permute=1,
             top_n=1,
             pruning_algorithm="quartic",
         )
@@ -60,7 +61,7 @@ class TestAlignmentPruner(unittest.TestCase):
 class TestPermutationTest(unittest.TestCase):
 
     def setUp(self):
-        self.tester = PermutationTest(num_workers=1, permutations=100)
+        self.tester = PermutationTest(num_workers_permute=1, permutations=100)
 
     def test_run_test(self):
         self.tester.run_test(

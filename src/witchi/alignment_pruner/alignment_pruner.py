@@ -13,6 +13,7 @@ from .utils import (
     write_pruned_dict_to_tsv,
     write_score_dict_to_json,
     write_score_dict_to_tsv,
+    make_score_dict,
 )
 
 
@@ -93,7 +94,7 @@ class AlignmentPruner:
         empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
             score_dict["after_real"], permutated_per_row_chi2
         )
-        row_empirical_pvalue_dict = self.permutation_test.make_score_dict(
+        row_empirical_pvalue_dict = make_score_dict(
             score_dict["after_real"],
             permutated_per_row_chi2,
             empirical_pvalues,
