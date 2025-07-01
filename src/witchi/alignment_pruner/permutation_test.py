@@ -57,6 +57,7 @@ class PermutationTest:
     def run(self, alignment_array, chi_square_calculator):
         """Run the permutation test and get chi-squared score percentiles and distribution."""
         print(f"Running {self.permutations} permutations.")
+        print(f"Using {self.num_workers} worker(s) for permutation")
         permutated_per_row_chi2 = self._permute_and_calculate_chi2(
             alignment_array, chi_square_calculator
         )
