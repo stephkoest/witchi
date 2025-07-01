@@ -51,6 +51,11 @@ class AlignmentPruner:
     def run(self):
         """Main method to run the recursive chi-square pruning."""
         start_time = time.time()
+        print("Starting pruning workflow")
+        print(f"Chi² calculator using {self.num_workers_chisq} worker(s)")
+        print(f"Permutation test using {self.num_workers_permute} worker(s)")
+        print(f"Pruning algorithm: {self.pruning_algorithm}")
+        print(f"Initial top_n: {self.top_n}")
         reader = AlignmentReader(self.file, self.format)
         alignment, alignment_array = reader.run()
 
