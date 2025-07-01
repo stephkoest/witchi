@@ -76,7 +76,7 @@ def main():
         "--format", default="fasta", help="Alignment format. (fasta)"
     )
     test_parser.add_argument(
-        "--num_workers",
+        "--num_workers_permute",
         type=int,
         default=1,
         help="Number of parallel workers (cores) to use. (1)",
@@ -101,7 +101,8 @@ def main():
             format=args.format,
             max_residue_pruned=args.max_residue_pruned,
             permutations=args.permutations,
-            num_workers=args.num_workers,
+            num_workers_chisq=args.num_workers_chisq,
+            num_workers_permute=args.num_workers_permute,
             top_n=args.top_n,
             pruning_algorithm=args.pruning_algorithm,
             touchdown=args.touchdown,
@@ -109,7 +110,7 @@ def main():
         pruner.run()
     elif args.command == "test":
         tester = PermutationTest(
-            num_workers=args.num_workers, permutations=args.permutations
+            num_workers_permute=args.num_workers_permute, permutations=args.permutations
         )
         tester.run_test(
             alignment_file=args.file,
