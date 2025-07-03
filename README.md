@@ -115,17 +115,10 @@ Once tyou have chose datasets you want to prune, go to the next step.
 witchi prune --file example.nex --max_residue_pruned 50 --pruning_algorithm wasserstein
 ```
 
-## Future Features
-Real-Time Visualization: Live plotting of distribution shifts in the terminal during pruning.
-Or maybe not.
-
 ## License
 witchi is licensed under the MIT License.
 
 ## Publication
 Preprint coming soon...
-
-## Contributing
-We welcome contributions! Please fork the repository, create a branch, and submit a pull request.
 
 ## Acknowledgments
