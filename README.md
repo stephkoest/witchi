@@ -1,4 +1,4 @@
-# WitChi: A Compositional Bias Pruning Tool for Multiple Sequence Alignments using Chi-squared Statistics
+# WitChi: A Compositional Bias Testing and Pruning Tool for Multiple Sequence Alignments using Chi-squared Statistics
 ![CI](https://github.com/stephkoest/witchi/actions/workflows/ci.yml/badge.svg)
 
 WitChi is a sophisticated alignment pruning tool designed to reduce compositional bias in multiple sequence alignments (MSAs). It utilizes statistical methods, permutation tests, and parallel processing to iteratively prune alignment columns, optimizing for unbiased taxonomic composition.
