@@ -119,6 +119,11 @@ witchi prune --file example.nex --max_residue_pruned 50 --pruning_algorithm wass
 witchi is licensed under the MIT License.
 
 ## Publication
-Preprint coming soon...
+If you use WitChi for your research, for now please cite the preprint:
+```
+WitChi: Efficient Detection and Pruning of Compositional Bias in Phylogenomic Alignments Using Empirical Chi-Squared Testing
+Stephan Koestlbacher, Kassiani Panagiotou, Daniel Tamarit, Thijs Ettema
+bioRxiv 2025.07.14.663642; doi: https://doi.org/10.1101/2025.07.14.663642
+```
 
 ## Acknowledgments
