@@ -93,7 +93,7 @@ class AlignmentPruner:
         write_pruned_dict_to_tsv(prune_dict, output_tsv_file, self.pruning_algorithm)
 
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
-            ".fasta", "_score_dict.tsv"
+            ".fasta", ".tsv"
         )
         # something to clean later, reintegrate into the main function
         empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
