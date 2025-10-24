@@ -23,6 +23,7 @@ class PermutationTest:
                     np.sum(permutated_per_row_chi2 >= per_row_chi2[i])
                     / len(permutated_per_row_chi2)
                 ) * len(per_row_chi2)
+                empirical_p = min(max(empirical_p, 0.0), 1.0)
                 empirical_p_list.append(empirical_p)
         # if not array, indicating total alignment chi2 scores
         else:
