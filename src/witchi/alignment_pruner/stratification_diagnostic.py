@@ -8,17 +8,19 @@ stratified permutation using two criteria:
    same significance conclusion?  If the standard null says biased but
    the stratified null does not, the inflation is masking real signal.
 
-2. **MAD outlier warning** (soft flag, conventional threshold): is the
-   stratified null median >= 3 MAD away from the standard null?  This
-   uses the standard robust-statistics convention for outlier detection
-   and warns that z-scores and pruning depth may be distorted even when
-   the binary significance call is preserved.
+2. **Robust Z-score warning** (soft flag, conventional threshold): is
+   the stratified null median >= 3 robust Z-scores away from the
+   standard null?  Uses the same MAD-based robust Z-score as the rest
+   of witchi (median / MAD with 0.6745 consistency constant), and the
+   standard |Z| >= 3 convention for outlier detection.
 """
 
 import numpy as np
 
+from .utils import _robust_zscore
 
-_MAD_OUTLIER_THRESHOLD = 3.0
+
+_ZSCORE_OUTLIER_THRESHOLD = 3.0
 
 
 # ---------------------------------------------------------------------------
@@ -46,8 +48,9 @@ def compare_null_distributions(observed_chi2, std_sums, strat_sums,
     -------
     dict
         ``valid``              – True if p-values are concordant.
-        ``warning``            – True if inflation >= 3 MAD.
-        ``inflation_mad``      – MAD distance between null medians.
+        ``warning``            – True if inflation_z >= 3.
+        ``inflation_z``        – robust Z-score of the stratified null
+                                 median against the standard null.
         ``observed_chi2``      – echo of input.
         ``p_standard``         – empirical p under standard null.
         ``p_stratified``       – empirical p under stratified null.
@@ -62,24 +65,19 @@ def compare_null_distributions(observed_chi2, std_sums, strat_sums,
 
     concordant = (p_std < alpha) == (p_strat < alpha)
 
-    std_med = float(np.median(std_sums))
     strat_med = float(np.median(strat_sums))
-    mad = float(np.median(np.abs(std_sums - std_med)))
-    if mad > 0:
-        inflation_mad = (strat_med - std_med) / mad
-    else:
-        inflation_mad = float("inf") if strat_med != std_med else 0.0
-    warning = inflation_mad >= _MAD_OUTLIER_THRESHOLD
+    inflation_z = float(_robust_zscore(strat_med, std_sums))
+    warning = inflation_z >= _ZSCORE_OUTLIER_THRESHOLD
 
     return {
         "valid": concordant,
         "warning": warning,
-        "inflation_mad": float(inflation_mad),
+        "inflation_z": inflation_z,
         "observed_chi2": float(observed_chi2),
         "p_standard": p_std,
         "p_stratified": p_strat,
         "concordant": concordant,
-        "standard_median": std_med,
+        "standard_median": float(np.median(std_sums)),
         "stratified_median": strat_med,
         "n_strata": n_strata,
         "alpha": alpha,
@@ -96,7 +94,7 @@ def print_diagnostic(diag):
     print(
         f"[diagnostic] Standard null median: {diag['standard_median']:.2f} | "
         f"Stratified null median: {diag['stratified_median']:.2f} | "
-        f"Inflation: {diag['inflation_mad']:.1f} MAD"
+        f"Inflation Z: {diag['inflation_z']:.1f}"
     )
     if not diag["valid"]:
         print(
@@ -107,7 +105,7 @@ def print_diagnostic(diag):
     elif diag["warning"]:
         print(
             "[diagnostic] CAUTION: null distributions are concordant but "
-            "inflation is substantial (>= 3 MAD). Z-scores and pruning "
+            "inflation is substantial (Z >= 3). Z-scores and pruning "
             "depth may be affected."
         )
     else:
@@ -186,7 +184,7 @@ def diagnose_stratification_validity(
         result = {
             "valid": True,
             "warning": False,
-            "inflation_mad": 0.0,
+            "inflation_z": 0.0,
             "observed_chi2": observed_chi2,
             "p_standard": p,
             "p_stratified": p,

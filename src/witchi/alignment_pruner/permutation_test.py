@@ -202,7 +202,7 @@ class PermutationTest:
                 p = float(np.sum(strat_sums >= observed_chi2) / len(strat_sums))
                 med = float(np.median(strat_sums))
                 diag = {
-                    "valid": True, "warning": False, "inflation_mad": 0.0,
+                    "valid": True, "warning": False, "inflation_z": 0.0,
                     "observed_chi2": observed_chi2,
                     "p_standard": p, "p_stratified": p,
                     "concordant": True,

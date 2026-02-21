@@ -342,7 +342,7 @@ class TestStratificationDiagnostic(unittest.TestCase):
             permutations=20, num_workers=1,
         )
         expected_keys = {
-            "valid", "warning", "inflation_mad", "observed_chi2",
+            "valid", "warning", "inflation_z", "observed_chi2",
             "p_standard", "p_stratified", "concordant",
             "standard_median", "stratified_median",
             "n_strata", "trivial", "alpha",
@@ -353,7 +353,7 @@ class TestStratificationDiagnostic(unittest.TestCase):
         self.assertIsInstance(result["concordant"], bool)
         self.assertIsInstance(result["trivial"], bool)
         self.assertIsInstance(result["observed_chi2"], float)
-        self.assertIsInstance(result["inflation_mad"], float)
+        self.assertIsInstance(result["inflation_z"], float)
 
     def test_diagnostic_p_values_in_range(self):
         """Both p-values are in [0, 1]."""
@@ -382,7 +382,7 @@ class TestStratificationDiagnostic(unittest.TestCase):
             self.assertTrue(result["valid"])
             self.assertFalse(result["warning"])
             self.assertTrue(result["concordant"])
-            self.assertEqual(result["inflation_mad"], 0.0)
+            self.assertEqual(result["inflation_z"], 0.0)
             self.assertEqual(result["p_standard"], result["p_stratified"])
 
     def test_diagnostic_concordance_logic(self):
@@ -412,8 +412,8 @@ class TestStratificationDiagnostic(unittest.TestCase):
         )
         self.assertGreater(result["observed_chi2"], 0.0)
 
-    def test_diagnostic_warning_consistent_with_inflation_mad(self):
-        """warning == (inflation_mad >= 3.0)."""
+    def test_diagnostic_warning_consistent_with_inflation_z(self):
+        """warning == (inflation_z >= 3.0)."""
         from witchi.alignment_pruner.stratification_diagnostic import (
             diagnose_stratification_validity,
         )
@@ -421,8 +421,8 @@ class TestStratificationDiagnostic(unittest.TestCase):
             self.alignment_array, self.alignment, self.chi_calc,
             permutations=50, num_workers=1,
         )
-        self.assertEqual(result["warning"], result["inflation_mad"] >= 3.0)
-        self.assertGreaterEqual(result["inflation_mad"], 0.0)
+        self.assertEqual(result["warning"], result["inflation_z"] >= 3.0)
+        self.assertGreaterEqual(result["inflation_z"], 0.0)
 
 
 if __name__ == "__main__":
