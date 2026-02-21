@@ -10,6 +10,7 @@ class PermutationTest:
         self.chi_square_calculator = None
         self.num_workers = num_workers_permute
         self.permutations = permutations
+        self._stratified_result = None
 
     def calc_empirical_pvalue(self, per_row_chi2, permutated_per_row_chi2):
         """Calculate empirical p-value."""
@@ -80,7 +81,71 @@ class PermutationTest:
             permutated_per_row_chi2,
         )
 
-    def run_test(self, alignment_file, alignment_format, create_output=False):
+    def compute_null(self, alignment_array, chi_square_calculator,
+                     strategy="standard", alignment=None):
+        """Compute the permutation null distribution.
+
+        For standard: bulk column permutation (all taxa exchangeable).
+        For similarity_stratified: within-stratum permutation with global
+        baseline chi2.  Stores the StratifiedResult internally for use by
+        calc_empirical_pvalue_strategy().
+
+        Parameters
+        ----------
+        alignment_array : (N, L) char array
+        chi_square_calculator : ChiSquareCalculator
+        strategy : str, "standard" or "similarity_stratified"
+        alignment : Bio.Align.MultipleSeqAlignment, required for
+            similarity_stratified (provides taxon names and raw sequences).
+
+        Returns
+        -------
+        tuple : (sums, maxes, upper_box_threshold, upper_threshold, pooled_null)
+        """
+        if strategy == "similarity_stratified":
+            from .stratified_permutation import run_similarity_stratified
+
+            self._stratified_result = run_similarity_stratified(
+                alignment_array,
+                alignment,
+                chi_square_calculator,
+                self.permutations,
+                self.num_workers,
+            )
+            return self._stratified_result.as_standard_tuple()
+        else:
+            self._stratified_result = None
+            return self.run(alignment_array, chi_square_calculator)
+
+    def calc_empirical_pvalue_strategy(self, per_row_chi2, permuted_chi2):
+        """Compute per-taxon empirical p-values, strategy-aware.
+
+        If a stratified result is stored (from compute_null with
+        similarity_stratified), uses per-stratum null pools with
+        Bonferroni correction by N.  Otherwise falls back to the
+        standard pooled-null comparison.
+
+        Parameters
+        ----------
+        per_row_chi2 : (N,) array of observed per-taxon chi2
+        permuted_chi2 : (P*N,) pooled null (used for standard mode)
+
+        Returns
+        -------
+        list of float, length N
+        """
+        if self._stratified_result is not None:
+            from .stratified_permutation import calc_empirical_pvalue_per_stratum
+
+            return calc_empirical_pvalue_per_stratum(
+                per_row_chi2,
+                self._stratified_result.stratum_pools,
+                len(per_row_chi2),
+            )
+        return self.calc_empirical_pvalue(per_row_chi2, permuted_chi2)
+
+    def run_test(self, alignment_file, alignment_format, create_output=False,
+                 strategy="standard"):
         """Run the permutation test on an alignment."""
         from .alignment_reader import AlignmentReader
         from .sequence_type_detector import SequenceTypeDetector
@@ -88,6 +153,7 @@ class PermutationTest:
         import time
 
         start_time = time.time()
+        print(f"Permutation strategy: {strategy}")
         reader = AlignmentReader(alignment_file, alignment_format)
         alignment, alignment_array = reader.run()
         detector = SequenceTypeDetector()
@@ -96,8 +162,12 @@ class PermutationTest:
 
         self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
         sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
-            self.run(alignment_array, self.chi_square_calculator)
+            self.compute_null(
+                alignment_array, self.chi_square_calculator,
+                strategy=strategy, alignment=alignment,
+            )
         )
+
         mean_perm_chi2 = np.mean(permutated_per_row_chi2)
         sd_perm_chi2 = np.std(permutated_per_row_chi2)
 
@@ -123,7 +193,7 @@ class PermutationTest:
             f"q95 Z-score: {(upper_chi_quantile - upper_threshold) / sd_perm_chi2:.2f}"
         )
         # calculate zscores and empirical p-values for each row
-        empirical_pvalues = self.calc_empirical_pvalue(
+        empirical_pvalues = self.calc_empirical_pvalue_strategy(
             per_row_chi2, permutated_per_row_chi2
         )
         row_empirical_pvalue_dict = make_score_dict(
@@ -164,4 +234,3 @@ class PermutationTest:
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Execution time for testing: {elapsed_time:.2f} seconds")
-        # write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")

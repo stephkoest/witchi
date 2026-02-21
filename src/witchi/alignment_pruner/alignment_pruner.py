@@ -29,6 +29,7 @@ class AlignmentPruner:
         top_n=10,
         pruning_algorithm="squared",
         touchdown=False,
+        strategy="standard",
     ):
         self.file = file
         self.format = format
@@ -39,6 +40,7 @@ class AlignmentPruner:
         self.touchdown = touchdown
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
+        self.strategy = strategy
         self.chi_square_calculator = None
         self.alignment_size = None
         self.initial_top_n = self.top_n
@@ -55,6 +57,7 @@ class AlignmentPruner:
         print(f"Chi² calculator using {self.num_workers_chisq} worker(s)")
         print(f"Permutation test using {self.num_workers_permute} worker(s)")
         print(f"Pruning algorithm: {self.pruning_algorithm}")
+        print(f"Permutation strategy: {self.strategy}")
         print(f"Initial top_n: {self.top_n}")
         reader = AlignmentReader(self.file, self.format)
         alignment, alignment_array = reader.run()
@@ -68,7 +71,10 @@ class AlignmentPruner:
             self.num_workers_permute, self.permutations
         )
         sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
-            self.permutation_test.run(alignment_array, self.chi_square_calculator)
+            self.permutation_test.compute_null(
+                alignment_array, self.chi_square_calculator,
+                strategy=self.strategy, alignment=alignment,
+            )
         )
 
         pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(
@@ -80,11 +86,14 @@ class AlignmentPruner:
 
         pruned_sequences = self.update_sequences(alignment, pruned_alignment_array)
         pruned_alignment = MultipleSeqAlignment(pruned_sequences)
-        # add touchdown suffix if applicable
+        # build output filename suffix
+        parts = [f"_{self.pruning_algorithm}_s{self.top_n}"]
+        if self.strategy != "standard":
+            parts.append(f"_{self.strategy}")
         if self.touchdown:
-            suffix = f"_{self.pruning_algorithm}_s{self.top_n}_touchdown_pruned.fasta"
-        else:
-            suffix = f"_{self.pruning_algorithm}_s{self.top_n}_pruned.fasta"
+            parts.append("_touchdown")
+        parts.append("_pruned.fasta")
+        suffix = "".join(parts)
         output_alignment_pruned_file = os.path.splitext(self.file)[0] + suffix
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", ".tsv"
@@ -95,8 +104,7 @@ class AlignmentPruner:
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", ".tsv"
         )
-        # something to clean later, reintegrate into the main function
-        empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
+        empirical_pvalues = self.permutation_test.calc_empirical_pvalue_strategy(
             score_dict["after_real"], permutated_per_row_chi2
         )
         row_empirical_pvalue_dict = make_score_dict(
@@ -285,15 +293,14 @@ class AlignmentPruner:
         return False, None
 
     def _calc_empirical_pvals(self, stats, permuted_sums, permuted_chi2):
-        """Calculate empirical p-values for alignment and taxa based on chi2 and permuted chi2."""
+        """Calculate empirical p-values for alignment and taxa."""
         alignment_empirical_p = self.permutation_test.calc_empirical_pvalue(
             stats["sum"], permuted_sums
         )[0]
-        empirical_pvals = self.permutation_test.calc_empirical_pvalue(
+        empirical_pvals = self.permutation_test.calc_empirical_pvalue_strategy(
             stats["per_row_chi2"], permuted_chi2
         )
         significant_count = sum(p <= 0.05 for p in empirical_pvals)
-
         return alignment_empirical_p, significant_count
 
     def _calculate_per_row_stats(self, alignment_array):
