@@ -1,18 +1,21 @@
 """Diagnostic for similarity-stratified permutation validity.
 
 Compares alignment-level chi2 sum distributions from standard vs
-stratified permutation using two criteria:
+stratified permutation using three metrics:
 
 1. **Concordance** (hard gate, threshold-free): do the observed
    alignment chi2's empirical p-values under both nulls lead to the
    same significance conclusion?  If the standard null says biased but
    the stratified null does not, the inflation is masking real signal.
 
-2. **Robust Z-score warning** (soft flag, conventional threshold): is
-   the stratified null median >= 3 robust Z-scores away from the
-   standard null?  Uses the same MAD-based robust Z-score as the rest
-   of witchi (median / MAD with 0.6745 consistency constant), and the
-   standard |Z| >= 3 convention for outlier detection.
+2. **Inflation Z** (robust Z-score): how far the stratified null median
+   is from the standard null, in robust standard deviations (MAD/0.6745).
+   Z >= 3 is the conventional outlier threshold.
+
+3. **Signal consumed** (relative inflation): what fraction of the
+   observed signal is consumed by the null inflation.  Puts the absolute
+   inflation into perspective — a large Z is harmless if the observed
+   chi2 dwarfs both nulls.
 """
 
 import numpy as np
@@ -48,9 +51,14 @@ def compare_null_distributions(observed_chi2, std_sums, strat_sums,
     -------
     dict
         ``valid``              – True if p-values are concordant.
-        ``warning``            – True if inflation_z >= 3.
+        ``warning``            – True if inflation_z >= 3 AND
+                                 signal_consumed >= 0.10.
         ``inflation_z``        – robust Z-score of the stratified null
                                  median against the standard null.
+        ``signal_consumed``    – fraction of observed signal consumed by
+                                 the inflation: (strat_med - std_med) /
+                                 (observed - std_med).  0 = no impact,
+                                 1 = inflation equals the entire signal.
         ``observed_chi2``      – echo of input.
         ``p_standard``         – empirical p under standard null.
         ``p_stratified``       – empirical p under stratified null.
@@ -65,19 +73,31 @@ def compare_null_distributions(observed_chi2, std_sums, strat_sums,
 
     concordant = (p_std < alpha) == (p_strat < alpha)
 
+    std_med = float(np.median(std_sums))
     strat_med = float(np.median(strat_sums))
     inflation_z = float(_robust_zscore(strat_med, std_sums))
-    warning = inflation_z >= _ZSCORE_OUTLIER_THRESHOLD
+
+    # Fraction of observed signal consumed by the inflation
+    signal_gap = observed_chi2 - std_med
+    if signal_gap > 0:
+        signal_consumed = (strat_med - std_med) / signal_gap
+    else:
+        # Observed <= standard null median: no signal to consume
+        signal_consumed = 0.0
+
+    # Warning requires both: statistically outlying AND practically relevant
+    warning = inflation_z >= _ZSCORE_OUTLIER_THRESHOLD and signal_consumed >= 0.10
 
     return {
         "valid": concordant,
         "warning": warning,
         "inflation_z": inflation_z,
+        "signal_consumed": float(signal_consumed),
         "observed_chi2": float(observed_chi2),
         "p_standard": p_std,
         "p_stratified": p_strat,
         "concordant": concordant,
-        "standard_median": float(np.median(std_sums)),
+        "standard_median": std_med,
         "stratified_median": strat_med,
         "n_strata": n_strata,
         "alpha": alpha,
@@ -94,7 +114,8 @@ def print_diagnostic(diag):
     print(
         f"[diagnostic] Standard null median: {diag['standard_median']:.2f} | "
         f"Stratified null median: {diag['stratified_median']:.2f} | "
-        f"Inflation Z: {diag['inflation_z']:.1f}"
+        f"Inflation Z: {diag['inflation_z']:.1f} | "
+        f"Signal consumed: {diag['signal_consumed']:.1%}"
     )
     if not diag["valid"]:
         print(
@@ -105,8 +126,8 @@ def print_diagnostic(diag):
     elif diag["warning"]:
         print(
             "[diagnostic] CAUTION: null distributions are concordant but "
-            "inflation is substantial (Z >= 3). Z-scores and pruning "
-            "depth may be affected."
+            "inflation consumes >= 10% of the observed signal. Z-scores "
+            "and pruning depth may be affected."
         )
     else:
         print("[diagnostic] Stratification valid — null distributions concordant.")
@@ -185,6 +206,7 @@ def diagnose_stratification_validity(
             "valid": True,
             "warning": False,
             "inflation_z": 0.0,
+            "signal_consumed": 0.0,
             "observed_chi2": observed_chi2,
             "p_standard": p,
             "p_stratified": p,
