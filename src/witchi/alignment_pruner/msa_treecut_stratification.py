@@ -335,7 +335,7 @@ def _auto_strata(
     order = np.argsort(isolation)
     sorted_vals = isolation[order]
 
-    best_k = 1
+
     best_ch = -1.0
     best_labels = np.zeros(n, dtype=np.intp)
 
@@ -354,7 +354,6 @@ def _auto_strata(
         ch = _calinski_harabasz(sorted_vals, labels_sorted)
         if ch > best_ch:
             best_ch = ch
-            best_k = k
             best_labels = labels_sorted.copy()
 
     # Map back to original taxon order
