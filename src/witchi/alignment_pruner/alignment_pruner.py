@@ -104,14 +104,16 @@ class AlignmentPruner:
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", ".tsv"
         )
-        empirical_pvalues = self.permutation_test.calc_empirical_pvalue_strategy(
-            score_dict["after_real"], permutated_per_row_chi2
+        empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
+            score_dict["after_real"], permutated_per_row_chi2,
+            per_taxon_pools=self.permutation_test._stratum_pools,
         )
         row_empirical_pvalue_dict = make_score_dict(
             score_dict["after_real"],
             permutated_per_row_chi2,
             empirical_pvalues,
             alignment,
+            per_taxon_pools=self.permutation_test._stratum_pools,
         )
         output_score_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_scores.tsv"
@@ -199,8 +201,7 @@ class AlignmentPruner:
         self.alignment_size = alignment_array.shape[1]
         original_indices = list(range(alignment_array.shape[1]))
 
-        mean_perm_chi2 = np.mean(permutated_per_row_chi2)
-        sd_perm_chi2 = np.std(permutated_per_row_chi2)
+        from .utils import _robust_zscore
         top_n_indices = []
         initial_global_chi2 = None
         chi2_differences = {}
@@ -242,12 +243,15 @@ class AlignmentPruner:
                 stats, permutated_per_row_chi2, alignment_empirical_p, significant_count
             )
 
+            mean_z = _robust_zscore(np.mean(per_row_chi2), permutated_per_row_chi2)
+            q95_z = _robust_zscore(upper_chi_quantile, permutated_per_row_chi2)
+
             print(
                 f"Columns removed: {removed_columns_count}, "
                 f"{(removed_columns_count / self.alignment_size) * 100:.2f}% | "
                 f"Biased taxa permutation: {significant_count} | "
-                f"Mean Z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
-                f"q95 Z-score: {(upper_chi_quantile - upper_threshold) / sd_perm_chi2:.2f} | "
+                f"Mean Z-score: {mean_z:.2f} | "
+                f"q95 Z-score: {q95_z:.2f} | "
                 f"Alignment p-value: {alignment_empirical_p:.2f}"
             )
 
@@ -297,8 +301,9 @@ class AlignmentPruner:
         alignment_empirical_p = self.permutation_test.calc_empirical_pvalue(
             stats["sum"], permuted_sums
         )[0]
-        empirical_pvals = self.permutation_test.calc_empirical_pvalue_strategy(
-            stats["per_row_chi2"], permuted_chi2
+        empirical_pvals = self.permutation_test.calc_empirical_pvalue(
+            stats["per_row_chi2"], permuted_chi2,
+            per_taxon_pools=self.permutation_test._stratum_pools,
         )
         significant_count = sum(p <= 0.05 for p in empirical_pvals)
         return alignment_empirical_p, significant_count

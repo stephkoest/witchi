@@ -30,9 +30,7 @@ Key design choices
 import math
 
 import numpy as np
-from joblib import Parallel, delayed
 
-from .chi_square_calculator import ChiSquareCalculator
 from .msa_treecut_stratification import msa_strata
 
 
@@ -79,99 +77,6 @@ class StratifiedResult:
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def calc_per_row_chi2(alignment_array, chi_calc):
-    """Compute per-taxon chi2 and alignment sum using WitChi calculator.
-
-    Returns (per_row_chi2, alignment_sum).
-    """
-    count_rows = chi_calc.calculate_row_counts(alignment_array)
-    expected = chi_calc.calculate_expected_observed(count_rows)
-    per_row = chi_calc.calculate_row_chi2(expected, count_rows)
-    return per_row, float(np.sum(per_row))
-
-
-def _permute_within_strata(alignment_array, strata_indices, chi_calc,
-                           permutations, num_workers=1):
-    """Global-baseline stratified column permutation.
-
-    For each permutation replicate:
-      1. Copy the full N x L alignment.
-      2. For each stratum, independently shuffle each column's residues
-         among that stratum's taxa.
-      3. Compute per-taxon chi2 on the full permuted alignment using
-         global expected frequencies.
-
-    Parameters
-    ----------
-    alignment_array : (N, L) char array
-    strata_indices : list of 1-D int arrays, one per stratum
-    chi_calc : ChiSquareCalculator
-    permutations : int
-    num_workers : int
-        Joblib parallel workers (matches PermutationTest convention).
-
-    Returns
-    -------
-    chi2_matrix : (P, N) float64 array
-    alignment_sums : (P,) float64 array
-    """
-    def _single_permutation(i):
-        rng = np.random.default_rng(12345 + i)
-        permuted = alignment_array.copy()
-        for s_indices in strata_indices:
-            if len(s_indices) < 2:
-                continue
-            sub = permuted[s_indices, :]
-            permuted[s_indices, :] = np.apply_along_axis(
-                rng.permutation, 0, sub
-            )
-        count_rows = chi_calc.calculate_row_counts(permuted)
-        expected = chi_calc.calculate_expected_observed(count_rows)
-        per_row = chi_calc.calculate_row_chi2(expected, count_rows)
-        return per_row
-
-    results = Parallel(n_jobs=num_workers)(
-        delayed(_single_permutation)(i) for i in range(permutations)
-    )
-
-    chi2_matrix = np.array(results, dtype=np.float64)
-    alignment_sums = np.sum(chi2_matrix, axis=1)
-    return chi2_matrix, alignment_sums
-
-
-# ---------------------------------------------------------------------------
-# Per-stratum p-value computation
-# ---------------------------------------------------------------------------
-
-def calc_empirical_pvalue_per_stratum(per_row_chi2, stratum_pools, n_taxa):
-    """Compute Bonferroni-corrected empirical p-values using per-stratum pools.
-
-    Each taxon's p-value is the fraction of its stratum's null pool >= the
-    observed chi2, multiplied by n_taxa (Bonferroni correction), clipped
-    to [0, 1].
-
-    Parameters
-    ----------
-    per_row_chi2 : (N,) array of observed per-taxon chi2
-    stratum_pools : dict mapping taxon index (int) -> (s*P,) null pool array
-    n_taxa : int, total number of taxa (N) for Bonferroni correction
-
-    Returns
-    -------
-    list of float, length N
-    """
-    pvals = []
-    for i in range(len(per_row_chi2)):
-        pool = stratum_pools[i]
-        p = float(np.sum(pool >= per_row_chi2[i]) / len(pool)) * n_taxa
-        pvals.append(min(max(p, 0.0), 1.0))
-    return pvals
-
-
-# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -179,8 +84,7 @@ def run_similarity_stratified(
     alignment_array,
     alignment,
     chi_square_calculator,
-    num_permutations,
-    num_workers=1,
+    permutation_test,
     max_clusters=None,
     n_neighbours=6,
     n_seeds=None,
@@ -198,10 +102,8 @@ def run_similarity_stratified(
         BioPython alignment object (used for taxon names and raw sequences).
     chi_square_calculator : ChiSquareCalculator
         Configured chi2 calculator for this alignment's character set.
-    num_permutations : int
-        Number of permutation replicates (P).
-    num_workers : int
-        Parallel workers for the permutation loop.
+    permutation_test : PermutationTest
+        Instance used for the permutation loop and summary statistics.
     max_clusters : int or None
         Upper bound on strata count.  Default: min(20, N // min_stratum_size).
     n_neighbours : int
@@ -217,6 +119,7 @@ def run_similarity_stratified(
         p-value computation and reporting.
     """
     N = alignment_array.shape[0]
+    num_permutations = permutation_test.permutations
     taxon_names = [rec.id for rec in alignment]
     raw_seqs = [str(rec.seq) for rec in alignment]
 
@@ -271,19 +174,13 @@ def run_similarity_stratified(
 
     print(f"[similarity_stratified] {len(bins)} realizable strata, "
           f"sizes={bin_sizes}")
-    print(f"Running {num_permutations} permutations.")
-    print(f"Using {num_workers} worker(s) for permutation")
 
     # --- Phase 2: global-baseline stratified permutation ---
-    chi2_matrix, alignment_sums = _permute_within_strata(
-        alignment_array, bins, chi_square_calculator,
-        num_permutations, num_workers,
+    chi2_matrix = permutation_test._permute_and_calculate_chi2(
+        alignment_array, chi_square_calculator, strata_indices=bins,
     )
 
     # --- Phase 3: build per-stratum null pools ---
-    # Map each taxon index to the pool of its stratum's chi2 values.
-    # Pool for stratum s = chi2_matrix[:, stratum_indices].ravel()
-    #   → s_i * P values, naturally weighted by stratum size.
     stratum_pools = {}
     for bin_indices in bins:
         pool = chi2_matrix[:, bin_indices].ravel().astype(np.float64)
@@ -291,13 +188,9 @@ def run_similarity_stratified(
             stratum_pools[int(idx)] = pool
 
     # --- Phase 4: standard summary statistics ---
-    # Match PermutationTest.run() output format so the pruning loop
-    # can consume the pooled null unchanged.
-    pooled_null = chi2_matrix.ravel().astype(np.float64)
-    sums = alignment_sums
-    maxes = np.max(chi2_matrix, axis=1)
-    upper_box_threshold = float(np.percentile(pooled_null, 75))
-    upper_threshold = float(np.percentile(pooled_null, 95))
+    sums, maxes, upper_box_threshold, upper_threshold, pooled_null = (
+        permutation_test._summarize_null(chi2_matrix)
+    )
 
     diagnostics = {
         "n_strata_natural": n_natural,
