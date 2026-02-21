@@ -115,6 +115,20 @@ Once tyou have chose datasets you want to prune, go to the next step.
 witchi prune --file example.nex --max_residue_pruned 50 --pruning_algorithm wasserstein
 ```
 
+## Similarity-Stratified Permutation
+
+By default, WitChi permutes columns across all taxa equally (standard strategy). If your alignment contains taxa with very uneven evolutionary divergence, the standard null can be inflated by compositional differences between clades. The `--strategy similarity_stratified` option clusters taxa by sequence similarity and permutes within those clusters, producing a more appropriate null distribution.
+
+### Testing with stratified permutation
+```bash
+witchi test --file alignment.fasta --format fasta --permutations 100 --num_workers_permute 2 --create_output --strategy similarity_stratified
+```
+
+### Pruning with stratified permutation
+```bash
+witchi prune --file alignment.fasta --format fasta --max_residue_pruned 50 --permutations 100 --pruning_algorithm quartic --strategy similarity_stratified
+```
+
 ## License
 witchi is licensed under the MIT License.
 
