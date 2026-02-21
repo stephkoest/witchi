@@ -65,6 +65,14 @@ def main():
         "columns to prune will be reduced to 0.1%% of the original alignment length "
         "per iteration after a threshold of 99.0%% is reached. ",
     )
+    prune_parser.add_argument(
+        "--strategy",
+        default="standard",
+        choices=["standard", "similarity_stratified"],
+        help="Permutation strategy. similarity_stratified restricts "
+        "column permutation within evolutionary-isolation strata, "
+        "correcting for uneven trees. Default is standard.",
+    )
 
     test_parser = subparsers.add_parser(
         "test", help="Run permutation test on alignment."
@@ -92,6 +100,14 @@ def main():
         action="store_true",
         help="Flag to create output file with scores.",
     )
+    test_parser.add_argument(
+        "--strategy",
+        default="standard",
+        choices=["standard", "similarity_stratified"],
+        help="Permutation strategy. similarity_stratified restricts "
+        "column permutation within evolutionary-isolation strata, "
+        "correcting for uneven trees. Default is standard.",
+    )
 
     args = parser.parse_args()
 
@@ -106,6 +122,7 @@ def main():
             top_n=args.top_n,
             pruning_algorithm=args.pruning_algorithm,
             touchdown=args.touchdown,
+            strategy=args.strategy,
         )
         pruner.run()
     elif args.command == "test":
@@ -116,6 +133,7 @@ def main():
             alignment_file=args.file,
             alignment_format=args.format,
             create_output=args.create_output,
+            strategy=args.strategy,
         )
 
 
