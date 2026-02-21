@@ -180,6 +180,37 @@ class PermutationTest:
             row_expected_observed, row_counts
         )
 
+        # --- Stratification diagnostic (automatic for stratified) ---
+        if (strategy == "similarity_stratified"
+                and self._stratified_result is not None):
+            from .stratification_diagnostic import (
+                compare_null_distributions, print_diagnostic,
+            )
+            n_strata = self._stratified_result.diagnostics["n_strata_realizable"]
+            strat_sums = self._stratified_result.sums
+            observed_chi2 = float(np.sum(per_row_chi2))
+            if n_strata > 1:
+                print("Running standard permutation for diagnostic comparison.")
+                pt_std = PermutationTest(self.num_workers, self.permutations)
+                std_sums, _, _, _, _ = pt_std.run(
+                    alignment_array, self.chi_square_calculator,
+                )
+                diag = compare_null_distributions(
+                    observed_chi2, std_sums, strat_sums, n_strata,
+                )
+            else:
+                p = float(np.sum(strat_sums >= observed_chi2) / len(strat_sums))
+                med = float(np.median(strat_sums))
+                diag = {
+                    "valid": True, "warning": False, "inflation_mad": 0.0,
+                    "observed_chi2": observed_chi2,
+                    "p_standard": p, "p_stratified": p,
+                    "concordant": True,
+                    "standard_median": med, "stratified_median": med,
+                    "n_strata": 1, "alpha": 0.05,
+                }
+            print_diagnostic(diag)
+
         upper_chi_quantile = np.percentile(per_row_chi2, 95)
 
         median_z = _robust_zscore(np.mean(per_row_chi2), permutated_per_row_chi2)

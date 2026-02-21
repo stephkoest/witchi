@@ -318,5 +318,112 @@ class TestStratifiedPermutation(unittest.TestCase):
         self.assertTrue(os.path.exists(base + ".tsv"))
 
 
+class TestStratificationDiagnostic(unittest.TestCase):
+    """Tests for the stratification validity diagnostic."""
+
+    def setUp(self):
+        from witchi.alignment_pruner.alignment_reader import AlignmentReader
+        from witchi.alignment_pruner.sequence_type_detector import SequenceTypeDetector
+        from witchi.alignment_pruner.chi_square_calculator import ChiSquareCalculator
+
+        reader = AlignmentReader("tests/data/example.nex", "nexus")
+        self.alignment, self.alignment_array = reader.run()
+        _, self.char_set = SequenceTypeDetector.detect(self.alignment)
+        self.chi_calc = ChiSquareCalculator(self.char_set, num_workers=1)
+        self.N = self.alignment_array.shape[0]
+
+    def test_diagnostic_returns_expected_keys(self):
+        """Return dict has all documented keys with correct types."""
+        from witchi.alignment_pruner.stratification_diagnostic import (
+            diagnose_stratification_validity,
+        )
+        result = diagnose_stratification_validity(
+            self.alignment_array, self.alignment, self.chi_calc,
+            permutations=20, num_workers=1,
+        )
+        expected_keys = {
+            "valid", "warning", "inflation_mad", "observed_chi2",
+            "p_standard", "p_stratified", "concordant",
+            "standard_median", "stratified_median",
+            "n_strata", "trivial", "alpha",
+        }
+        self.assertEqual(set(result.keys()), expected_keys)
+        self.assertIsInstance(result["valid"], bool)
+        self.assertIsInstance(result["warning"], bool)
+        self.assertIsInstance(result["concordant"], bool)
+        self.assertIsInstance(result["trivial"], bool)
+        self.assertIsInstance(result["observed_chi2"], float)
+        self.assertIsInstance(result["inflation_mad"], float)
+
+    def test_diagnostic_p_values_in_range(self):
+        """Both p-values are in [0, 1]."""
+        from witchi.alignment_pruner.stratification_diagnostic import (
+            diagnose_stratification_validity,
+        )
+        result = diagnose_stratification_validity(
+            self.alignment_array, self.alignment, self.chi_calc,
+            permutations=20, num_workers=1,
+        )
+        for key in ("p_standard", "p_stratified"):
+            self.assertGreaterEqual(result[key], 0.0)
+            self.assertLessEqual(result[key], 1.0)
+
+    def test_diagnostic_trivial_with_few_taxa(self):
+        """With 5 taxa, likely 1 stratum -> trivial=True, valid=True."""
+        from witchi.alignment_pruner.stratification_diagnostic import (
+            diagnose_stratification_validity,
+        )
+        result = diagnose_stratification_validity(
+            self.alignment_array, self.alignment, self.chi_calc,
+            permutations=20, num_workers=1,
+        )
+        if result["n_strata"] <= 1:
+            self.assertTrue(result["trivial"])
+            self.assertTrue(result["valid"])
+            self.assertFalse(result["warning"])
+            self.assertTrue(result["concordant"])
+            self.assertEqual(result["inflation_mad"], 0.0)
+            self.assertEqual(result["p_standard"], result["p_stratified"])
+
+    def test_diagnostic_concordance_logic(self):
+        """valid == concordant, and concordance matches p-value agreement."""
+        from witchi.alignment_pruner.stratification_diagnostic import (
+            diagnose_stratification_validity,
+        )
+        result = diagnose_stratification_validity(
+            self.alignment_array, self.alignment, self.chi_calc,
+            permutations=50, num_workers=1,
+        )
+        alpha = result["alpha"]
+        expected_concordant = (
+            (result["p_standard"] < alpha) == (result["p_stratified"] < alpha)
+        )
+        self.assertEqual(result["concordant"], expected_concordant)
+        self.assertEqual(result["valid"], result["concordant"])
+
+    def test_diagnostic_observed_chi2_is_positive(self):
+        """Observed chi2 should be a positive number."""
+        from witchi.alignment_pruner.stratification_diagnostic import (
+            diagnose_stratification_validity,
+        )
+        result = diagnose_stratification_validity(
+            self.alignment_array, self.alignment, self.chi_calc,
+            permutations=20, num_workers=1,
+        )
+        self.assertGreater(result["observed_chi2"], 0.0)
+
+    def test_diagnostic_warning_consistent_with_inflation_mad(self):
+        """warning == (inflation_mad >= 3.0)."""
+        from witchi.alignment_pruner.stratification_diagnostic import (
+            diagnose_stratification_validity,
+        )
+        result = diagnose_stratification_validity(
+            self.alignment_array, self.alignment, self.chi_calc,
+            permutations=50, num_workers=1,
+        )
+        self.assertEqual(result["warning"], result["inflation_mad"] >= 3.0)
+        self.assertGreaterEqual(result["inflation_mad"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
