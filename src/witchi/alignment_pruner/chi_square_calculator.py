@@ -1,6 +1,5 @@
 import numpy as np
 from joblib import Parallel, delayed
-from scipy.stats import wasserstein_distance
 
 
 class ChiSquareCalculator:
@@ -66,13 +65,21 @@ class ChiSquareCalculator:
         return outlyingness_sum
 
     def calculate_row_chi2_wasserstein(
-        self, expected_values, count_rows_array, permutated_per_row_chi2
+        self, expected_values, count_rows_array, null_quantiles
     ):
-        """Calculate the chi-squared score for all taxa."""
-        per_row_chi2 = self.calculate_row_chi2(expected_values, count_rows_array)
-        wasserstein = wasserstein_distance(per_row_chi2, permutated_per_row_chi2)
+        """Wasserstein-1 distance between observed per-taxon chi² and null.
 
-        return wasserstein
+        Parameters
+        ----------
+        null_quantiles : (K,) array
+            Pre-compressed quantiles of the null distribution at K
+            uniformly-spaced positions.
+        """
+        per_row_chi2 = self.calculate_row_chi2(expected_values, count_rows_array)
+        K = len(null_quantiles)
+        positions = np.linspace(0, 1, K + 2)[1:-1]
+        obs_quantiles = np.quantile(per_row_chi2, positions)
+        return float(np.mean(np.abs(obs_quantiles - null_quantiles)))
 
     def calculate_quartic_row_global_chi2(self, expected_values, count_rows_array):
         """Calculate the chi-squared score for all taxa."""
@@ -138,7 +145,7 @@ class ChiSquareCalculator:
         return dict(enumerate(chi2_differences))
 
     def calculate_wasserstein_difference(
-        self, count_rows_array, alignment_array, wasserstein, permutated_per_row_chi2
+        self, count_rows_array, alignment_array, wasserstein, null_quantiles
     ):
         """Calculate the wasserstein difference for each column based on its impact on the chi-squared score of rows."""
 
@@ -149,7 +156,7 @@ class ChiSquareCalculator:
             return self.calculate_row_chi2_wasserstein(
                 self.calculate_expected_observed(col_count),
                 col_count,
-                permutated_per_row_chi2,
+                null_quantiles,
             )
 
         chi2_differences = wasserstein - np.array(

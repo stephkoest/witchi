@@ -77,6 +77,11 @@ class AlignmentPruner:
             )
         )
 
+        # Compress pooled null to quantiles for Wasserstein pruning
+        K = min(200, len(permutated_per_row_chi2))
+        positions = np.linspace(0, 1, K + 2)[1:-1]
+        self._null_quantiles = np.quantile(permutated_per_row_chi2, positions)
+
         pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(
             alignment_array,
             sums,
@@ -179,10 +184,10 @@ class AlignmentPruner:
         permutated_per_row_chi2,
     ):
         wasserstein = self.chi_square_calculator.calculate_row_chi2_wasserstein(
-            expected_observed, count_rows_array, permutated_per_row_chi2
+            expected_observed, count_rows_array, self._null_quantiles
         )
         chi2_differences = self.chi_square_calculator.calculate_wasserstein_difference(
-            count_rows_array, alignment_array, wasserstein, permutated_per_row_chi2
+            count_rows_array, alignment_array, wasserstein, self._null_quantiles
         )
         return wasserstein, chi2_differences
 
