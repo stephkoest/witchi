@@ -432,8 +432,8 @@ def msa_strata(
     edges = _build_nn_graph(proj, k_nn=n_neighbours)
     isolation = _mean_knn_distances(n, edges)
 
-    # Always compute natural strata first (unconstrained, min_s=2, K_max capped at 10)
-    natural_max_k = min(10, max_clusters) if max_clusters else 10
+    # Always compute natural strata first (unconstrained, min_s=2, K_max capped at 3)
+    natural_max_k = min(3, max_clusters) if max_clusters else 3
     natural_ids = _auto_strata(isolation, min_stratum_size=2, max_clusters=natural_max_k)
 
     # If caller needs power-constrained strata, compute those too
