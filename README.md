@@ -117,7 +117,12 @@ witchi prune --file example.nex --max_residue_pruned 50 --pruning_algorithm wass
 
 ## Similarity-Stratified Permutation
 
-By default, WitChi permutes columns across all taxa equally (standard strategy). If your alignment contains taxa with very uneven evolutionary divergence, the standard null can lead to false positive flagging of long branched and false negative flagging of short branched taxa. The `--strategy similarity_stratified` option clusters taxa by sequence similarity and permutes within those clusters, with the potential to producing a more appropriate null distribution.
+By default, WitChi permutes columns across all taxa equally (standard strategy). This treats all taxa as exchangeable, which can be inappropriate on uneven trees: long-branch taxa may be falsely flagged as compositionally biased, while short-branch taxa may be missed.
+
+The `--strategy similarity_stratified` option addresses this by:
+1. **Clustering taxa into strata** based on evolutionary isolation (k-NN distance in a seed-projection space).
+2. **Permuting columns within each stratum**, preserving the correlation structure imposed by shared ancestry.
+3. **Freedman-Lane recentering**: computing null chi-squared values from within-stratum residuals weighted by global frequencies. This removes the inflation that would otherwise arise when a stratum's composition differs from the global average, producing a tighter and more accurate null distribution.
 
 ### Testing with stratified permutation
 ```bash
