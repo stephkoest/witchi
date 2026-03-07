@@ -297,12 +297,16 @@ class PermutationTest:
             permutated_per_row_chi2,
             per_taxon_pools=self._stratum_pools,
         )
+        name_to_stratum = None
+        if self._stratified_result is not None:
+            name_to_stratum = self._stratified_result.diagnostics.get("name_to_stratum")
         row_empirical_pvalue_dict = make_score_dict(
             per_row_chi2,
             permutated_per_row_chi2,
             empirical_pvalues,
             alignment,
             per_taxon_pools=self._stratum_pools,
+            name_to_stratum=name_to_stratum,
         )
         # check for significant rows
         significant_list = [

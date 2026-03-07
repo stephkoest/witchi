@@ -116,12 +116,18 @@ class AlignmentPruner:
             permutated_per_row_chi2,
             per_taxon_pools=self.permutation_test._stratum_pools,
         )
+        name_to_stratum = None
+        if self.permutation_test._stratified_result is not None:
+            name_to_stratum = self.permutation_test._stratified_result.diagnostics.get(
+                "name_to_stratum"
+            )
         row_empirical_pvalue_dict = make_score_dict(
             score_dict["after_real"],
             permutated_per_row_chi2,
             empirical_pvalues,
             alignment,
             per_taxon_pools=self.permutation_test._stratum_pools,
+            name_to_stratum=name_to_stratum,
         )
         output_score_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_scores.tsv"
