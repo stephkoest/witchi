@@ -72,8 +72,10 @@ class AlignmentPruner:
         )
         sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
             self.permutation_test.compute_null(
-                alignment_array, self.chi_square_calculator,
-                strategy=self.strategy, alignment=alignment,
+                alignment_array,
+                self.chi_square_calculator,
+                strategy=self.strategy,
+                alignment=alignment,
             )
         )
 
@@ -110,7 +112,8 @@ class AlignmentPruner:
             ".fasta", ".tsv"
         )
         empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
-            score_dict["after_real"], permutated_per_row_chi2,
+            score_dict["after_real"],
+            permutated_per_row_chi2,
             per_taxon_pools=self.permutation_test._stratum_pools,
         )
         row_empirical_pvalue_dict = make_score_dict(
@@ -207,6 +210,7 @@ class AlignmentPruner:
         original_indices = list(range(alignment_array.shape[1]))
 
         from .utils import _robust_zscore
+
         top_n_indices = []
         initial_global_chi2 = None
         chi2_differences = {}
@@ -307,7 +311,8 @@ class AlignmentPruner:
             stats["sum"], permuted_sums
         )[0]
         empirical_pvals = self.permutation_test.calc_empirical_pvalue(
-            stats["per_row_chi2"], permuted_chi2,
+            stats["per_row_chi2"],
+            permuted_chi2,
             per_taxon_pools=self.permutation_test._stratum_pools,
         )
         significant_count = sum(p <= 0.05 for p in empirical_pvals)

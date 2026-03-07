@@ -61,8 +61,10 @@ def _encode_msa(msa: list[str]) -> tuple[np.ndarray, np.ndarray]:
 # Phase 1-2: Seed projection  — O(k*N*L), memory O(N*L + N*k)
 # ---------------------------------------------------------------------------
 
-def _hamming_seed_to_all(enc: np.ndarray, is_res: np.ndarray,
-                         seed_idx: int) -> np.ndarray:
+
+def _hamming_seed_to_all(
+    enc: np.ndarray, is_res: np.ndarray, seed_idx: int
+) -> np.ndarray:
     """Fractional Hamming from one seed to all sequences (fully vectorised).
 
     Parameters
@@ -71,16 +73,17 @@ def _hamming_seed_to_all(enc: np.ndarray, is_res: np.ndarray,
     is_res : (N, L) bool — residue mask (True = not a gap)
     seed_idx : index of seed sequence
     """
-    shared = is_res & is_res[seed_idx]                      # (N, L) bool
-    n_shared = shared.sum(axis=1).astype(np.float64)         # (N,)
-    mismatches = ((enc != enc[seed_idx]) & shared).sum(      # (N,)
-        axis=1
-    ).astype(np.float64)
+    shared = is_res & is_res[seed_idx]  # (N, L) bool
+    n_shared = shared.sum(axis=1).astype(np.float64)  # (N,)
+    mismatches = (
+        ((enc != enc[seed_idx]) & shared).sum(axis=1).astype(np.float64)  # (N,)
+    )
     return np.where(n_shared > 0, mismatches / n_shared, 1.0)
 
 
-def _seed_projection(msa: list[str], k: Optional[int] = None,
-                     rng_seed: int = 42) -> np.ndarray:
+def _seed_projection(
+    msa: list[str], k: Optional[int] = None, rng_seed: int = 42
+) -> np.ndarray:
     """Project sequences into R^k via distances to k seed sequences.
 
     Encodes the MSA once, selects seeds via farthest-point sampling,
@@ -117,13 +120,13 @@ def _seed_projection(msa: list[str], k: Optional[int] = None,
 # Phase 3: Nearest-neighbour graph  — O(N*d*log N)
 # ---------------------------------------------------------------------------
 
+
 def _euclidean(a: np.ndarray, b: np.ndarray) -> float:
     d = a - b
     return float(math.sqrt(d @ d))
 
 
-def _build_nn_graph(proj: np.ndarray, k_nn: int = 6
-                    ) -> list[tuple[int, int, float]]:
+def _build_nn_graph(proj: np.ndarray, k_nn: int = 6) -> list[tuple[int, int, float]]:
     """k-NN graph via dimension sweeps in low-d projection space."""
     n, d = proj.shape
     k_nn = min(k_nn, n - 1)
@@ -151,8 +154,7 @@ def _build_nn_graph(proj: np.ndarray, k_nn: int = 6
     return _keep_k_nearest(edges, k_nn)
 
 
-def _nn_graph_brute(proj: np.ndarray, k_nn: int
-                    ) -> list[tuple[int, int, float]]:
+def _nn_graph_brute(proj: np.ndarray, k_nn: int) -> list[tuple[int, int, float]]:
     """Exact k-NN for small N — vectorised pairwise distances."""
     n = proj.shape[0]
     diff = proj[:, np.newaxis, :] - proj[np.newaxis, :, :]
@@ -161,14 +163,15 @@ def _nn_graph_brute(proj: np.ndarray, k_nn: int
     edges: dict[tuple[int, int], float] = {}
     for i in range(n):
         order = np.argsort(dists[i])
-        for j in order[1:k_nn + 1]:
+        for j in order[1 : k_nn + 1]:
             key = (min(i, int(j)), max(i, int(j)))
             edges[key] = float(dists[i, j])
     return [(u, v, w) for (u, v), w in edges.items()]
 
 
-def _keep_k_nearest(edges: dict[tuple[int, int], float], k: int
-                    ) -> list[tuple[int, int, float]]:
+def _keep_k_nearest(
+    edges: dict[tuple[int, int], float], k: int
+) -> list[tuple[int, int, float]]:
     per_node: dict[int, list[tuple[float, int]]] = defaultdict(list)
     for (u, v), w in edges.items():
         per_node[u].append((w, v))
@@ -185,6 +188,7 @@ def _keep_k_nearest(edges: dict[tuple[int, int], float], k: int
 # ---------------------------------------------------------------------------
 # Phase 4: Isolation metric  — O(N)
 # ---------------------------------------------------------------------------
+
 
 def _mean_knn_distances(
     n: int,
@@ -208,6 +212,7 @@ def _mean_knn_distances(
 # ---------------------------------------------------------------------------
 # Phase 5: Fisher-Jenks natural breaks + Calinski-Harabasz  — O(N*K^2)
 # ---------------------------------------------------------------------------
+
 
 def _fisher_jenks(values: np.ndarray, k: int) -> np.ndarray:
     """Fisher-Jenks optimal 1-D partition into k classes (vectorised DP).
@@ -335,7 +340,6 @@ def _auto_strata(
     order = np.argsort(isolation)
     sorted_vals = isolation[order]
 
-
     best_ch = -1.0
     best_labels = np.zeros(n, dtype=np.intp)
 
@@ -365,6 +369,7 @@ def _auto_strata(
 # ═══════════════════════════════════════════════════════════════════════════
 # Public API
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def msa_strata(
     msa: list[str],
@@ -434,7 +439,9 @@ def msa_strata(
 
     # Always compute natural strata first (unconstrained, min_s=2, K_max capped at 3)
     natural_max_k = min(3, max_clusters) if max_clusters else 3
-    natural_ids = _auto_strata(isolation, min_stratum_size=2, max_clusters=natural_max_k)
+    natural_ids = _auto_strata(
+        isolation, min_stratum_size=2, max_clusters=natural_max_k
+    )
 
     # If caller needs power-constrained strata, compute those too
     if min_stratum_size > 2:

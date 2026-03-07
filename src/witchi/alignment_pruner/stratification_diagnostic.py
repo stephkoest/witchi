@@ -30,8 +30,10 @@ _ZSCORE_OUTLIER_THRESHOLD = 3.0
 # Core comparison (reusable with pre-computed data)
 # ---------------------------------------------------------------------------
 
-def compare_null_distributions(observed_chi2, std_sums, strat_sums,
-                               n_strata, alpha=0.05):
+
+def compare_null_distributions(
+    observed_chi2, std_sums, strat_sums, n_strata, alpha=0.05
+):
     """Compare standard vs stratified null chi2 sum distributions.
 
     Parameters
@@ -137,6 +139,7 @@ def print_diagnostic(diag):
 # Standalone entry point (runs both permutations from scratch)
 # ---------------------------------------------------------------------------
 
+
 def diagnose_stratification_validity(
     alignment_array,
     alignment,
@@ -186,10 +189,13 @@ def diagnose_stratification_validity(
 
     # --- Stratified permutation (also reveals n_strata) ---
     pt_strat = PermutationTest(
-        num_workers_permute=num_workers, permutations=permutations,
+        num_workers_permute=num_workers,
+        permutations=permutations,
     )
     strat_result = run_similarity_stratified(
-        alignment_array, alignment, chi_square_calculator,
+        alignment_array,
+        alignment,
+        chi_square_calculator,
         permutation_test=pt_strat,
         max_clusters=max_clusters,
         n_neighbours=n_neighbours,
@@ -221,12 +227,17 @@ def diagnose_stratification_validity(
 
     # --- Standard permutation ---
     pt_std = PermutationTest(
-        num_workers_permute=num_workers, permutations=permutations,
+        num_workers_permute=num_workers,
+        permutations=permutations,
     )
     std_sums, _, _, _, _ = pt_std.run(alignment_array, chi_square_calculator)
 
     result = compare_null_distributions(
-        observed_chi2, std_sums, strat_sums, n_strata, alpha=alpha,
+        observed_chi2,
+        std_sums,
+        strat_sums,
+        n_strata,
+        alpha=alpha,
     )
     result["trivial"] = False
     return result

@@ -41,8 +41,9 @@ class PermutationTest:
         self.permutations = permutations
         self._stratified_result = None
 
-    def calc_empirical_pvalue(self, per_row_chi2, permutated_per_row_chi2,
-                              per_taxon_pools=None):
+    def calc_empirical_pvalue(
+        self, per_row_chi2, permutated_per_row_chi2, per_taxon_pools=None
+    ):
         """Calculate empirical p-value.
 
         Parameters
@@ -60,12 +61,14 @@ class PermutationTest:
         # check if array, indicating per taxon chi2 scores
         if isinstance(per_row_chi2, np.ndarray):
             for i in range(len(per_row_chi2)):
-                pool = (per_taxon_pools[i] if per_taxon_pools is not None
-                        else permutated_per_row_chi2)
-                empirical_p = (
-                    np.sum(pool >= per_row_chi2[i])
-                    / len(pool)
-                ) * len(per_row_chi2)
+                pool = (
+                    per_taxon_pools[i]
+                    if per_taxon_pools is not None
+                    else permutated_per_row_chi2
+                )
+                empirical_p = (np.sum(pool >= per_row_chi2[i]) / len(pool)) * len(
+                    per_row_chi2
+                )
                 empirical_p = min(max(empirical_p, 0.0), 1.0)
                 empirical_p_list.append(empirical_p)
         # if not array, indicating total alignment chi2 scores
@@ -77,8 +80,9 @@ class PermutationTest:
 
         return empirical_p_list
 
-    def _permute_and_calculate_chi2(self, alignment_array, chi_square_calculator,
-                                     strata_indices=None):
+    def _permute_and_calculate_chi2(
+        self, alignment_array, chi_square_calculator, strata_indices=None
+    ):
         def permute_single_calculate_chi2(i):
             iter_seed = 12345 + i
             rng = np.random.default_rng(iter_seed)
@@ -99,14 +103,10 @@ class PermutationTest:
                 permuted_array
             )
             if strata_indices is not None:
-                per_row_chi2 = _freedman_lane_chi2(
-                    count_rows_array, strata_indices
-                )
+                per_row_chi2 = _freedman_lane_chi2(count_rows_array, strata_indices)
             else:
-                expected_observed = (
-                    chi_square_calculator.calculate_expected_observed(
-                        count_rows_array
-                    )
+                expected_observed = chi_square_calculator.calculate_expected_observed(
+                    count_rows_array
                 )
                 per_row_chi2 = chi_square_calculator.calculate_row_chi2(
                     expected_observed, count_rows_array
@@ -147,8 +147,13 @@ class PermutationTest:
             return self._stratified_result.stratum_pools
         return None
 
-    def compute_null(self, alignment_array, chi_square_calculator,
-                     strategy="standard", alignment=None):
+    def compute_null(
+        self,
+        alignment_array,
+        chi_square_calculator,
+        strategy="standard",
+        alignment=None,
+    ):
         """Compute the permutation null distribution.
 
         For standard: bulk column permutation (all taxa exchangeable).
@@ -182,8 +187,9 @@ class PermutationTest:
             self._stratified_result = None
             return self.run(alignment_array, chi_square_calculator)
 
-    def run_test(self, alignment_file, alignment_format, create_output=False,
-                 strategy="standard"):
+    def run_test(
+        self, alignment_file, alignment_format, create_output=False, strategy="standard"
+    ):
         """Run the permutation test on an alignment."""
         from .alignment_reader import AlignmentReader
         from .sequence_type_detector import SequenceTypeDetector
@@ -201,8 +207,10 @@ class PermutationTest:
         self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
         sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
             self.compute_null(
-                alignment_array, self.chi_square_calculator,
-                strategy=strategy, alignment=alignment,
+                alignment_array,
+                self.chi_square_calculator,
+                strategy=strategy,
+                alignment=alignment,
             )
         )
 
@@ -217,11 +225,12 @@ class PermutationTest:
         )
 
         # --- Stratification diagnostic (automatic for stratified) ---
-        if (strategy == "similarity_stratified"
-                and self._stratified_result is not None):
+        if strategy == "similarity_stratified" and self._stratified_result is not None:
             from .stratification_diagnostic import (
-                compare_null_distributions, print_diagnostic,
+                compare_null_distributions,
+                print_diagnostic,
             )
+
             n_strata = self._stratified_result.diagnostics["n_strata_realizable"]
             strat_sums = self._stratified_result.sums
             observed_chi2 = float(np.sum(per_row_chi2))
@@ -229,22 +238,31 @@ class PermutationTest:
                 print("Running standard permutation for diagnostic comparison.")
                 pt_std = PermutationTest(self.num_workers, self.permutations)
                 std_sums, _, _, _, _ = pt_std.run(
-                    alignment_array, self.chi_square_calculator,
+                    alignment_array,
+                    self.chi_square_calculator,
                 )
                 diag = compare_null_distributions(
-                    observed_chi2, std_sums, strat_sums, n_strata,
+                    observed_chi2,
+                    std_sums,
+                    strat_sums,
+                    n_strata,
                 )
             else:
                 p = float(np.sum(strat_sums >= observed_chi2) / len(strat_sums))
                 med = float(np.median(strat_sums))
                 diag = {
-                    "valid": True, "warning": False,
-                    "inflation_z": 0.0, "signal_consumed": 0.0,
+                    "valid": True,
+                    "warning": False,
+                    "inflation_z": 0.0,
+                    "signal_consumed": 0.0,
                     "observed_chi2": observed_chi2,
-                    "p_standard": p, "p_stratified": p,
+                    "p_standard": p,
+                    "p_stratified": p,
                     "concordant": True,
-                    "standard_median": med, "stratified_median": med,
-                    "n_strata": 1, "alpha": 0.05,
+                    "standard_median": med,
+                    "stratified_median": med,
+                    "n_strata": 1,
+                    "alpha": 0.05,
                 }
             print_diagnostic(diag)
 
@@ -256,7 +274,7 @@ class PermutationTest:
         print(
             f"Alignment chi2score: {(np.sum(per_row_chi2)):.2f} | "
             f"Permutations alignment chi2scores: {(min(sums)):.2f} - {(max(sums)):.2f} | "
-            f"Empirical-P: {self.calc_empirical_pvalue(np.sum(per_row_chi2),sums)[0] }"
+            f"Empirical-P: {self.calc_empirical_pvalue(np.sum(per_row_chi2), sums)[0]}"
         )
         print(
             f"Alignment mean taxa chi2score: {(np.mean(per_row_chi2)):.2f} | "
@@ -266,11 +284,15 @@ class PermutationTest:
         )
         # calculate zscores and empirical p-values for each row
         empirical_pvalues = self.calc_empirical_pvalue(
-            per_row_chi2, permutated_per_row_chi2,
+            per_row_chi2,
+            permutated_per_row_chi2,
             per_taxon_pools=self._stratum_pools,
         )
         row_empirical_pvalue_dict = make_score_dict(
-            per_row_chi2, permutated_per_row_chi2, empirical_pvalues, alignment,
+            per_row_chi2,
+            permutated_per_row_chi2,
+            empirical_pvalues,
+            alignment,
             per_taxon_pools=self._stratum_pools,
         )
         # check for significant rows

@@ -75,7 +75,10 @@ def _robust_zscore(observed, null_pool):
 
 
 def make_score_dict(
-    per_row_chi2, permutated_per_row_chi2, empirical_pvalues, alignment,
+    per_row_chi2,
+    permutated_per_row_chi2,
+    empirical_pvalues,
+    alignment,
     per_taxon_pools=None,
 ):
     """Make a dictionary of chi-squared scores for each row in the alignment.
@@ -90,14 +93,19 @@ def make_score_dict(
     per_row_chi2 = np.array(per_row_chi2)
     row_names = [record.id for record in alignment]
 
-    zscores = np.array([
-        _robust_zscore(
-            per_row_chi2[i],
-            per_taxon_pools[i] if per_taxon_pools is not None
-            else permutated_per_row_chi2,
-        )
-        for i in range(len(per_row_chi2))
-    ])
+    zscores = np.array(
+        [
+            _robust_zscore(
+                per_row_chi2[i],
+                (
+                    per_taxon_pools[i]
+                    if per_taxon_pools is not None
+                    else permutated_per_row_chi2
+                ),
+            )
+            for i in range(len(per_row_chi2))
+        ]
+    )
 
     row_empirical_pvalue_dict = {
         row_names[i]: {

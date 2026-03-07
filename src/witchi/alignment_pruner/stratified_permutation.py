@@ -38,6 +38,7 @@ from .msa_treecut_stratification import msa_strata
 # Result container
 # ---------------------------------------------------------------------------
 
+
 class StratifiedResult:
     """Result from similarity-stratified permutation testing.
 
@@ -47,20 +48,30 @@ class StratifiedResult:
     fields for per-stratum p-value computation.
     """
 
-    def __init__(self, sums, maxes, upper_box_threshold, upper_threshold,
-                 pooled_null, chi2_matrix, stratum_pools, bin_ids, diagnostics):
+    def __init__(
+        self,
+        sums,
+        maxes,
+        upper_box_threshold,
+        upper_threshold,
+        pooled_null,
+        chi2_matrix,
+        stratum_pools,
+        bin_ids,
+        diagnostics,
+    ):
         # Standard fields (same semantics as PermutationTest.run() output)
-        self.sums = sums                          # (P,) alignment-level chi2 sums
-        self.maxes = maxes                        # (P,) per-permutation max chi2
+        self.sums = sums  # (P,) alignment-level chi2 sums
+        self.maxes = maxes  # (P,) per-permutation max chi2
         self.upper_box_threshold = upper_box_threshold  # 75th percentile of pooled null
-        self.upper_threshold = upper_threshold    # 95th percentile of pooled null
-        self.pooled_null = pooled_null            # (P*N,) flattened pooled null
+        self.upper_threshold = upper_threshold  # 95th percentile of pooled null
+        self.pooled_null = pooled_null  # (P*N,) flattened pooled null
 
         # Stratified-specific fields
-        self.chi2_matrix = chi2_matrix            # (P, N) per-taxon chi2 per permutation
-        self.stratum_pools = stratum_pools        # {taxon_idx: pool_array}
-        self.bin_ids = bin_ids                    # (N,) stratum assignment
-        self.diagnostics = diagnostics            # natural/realizable strata info
+        self.chi2_matrix = chi2_matrix  # (P, N) per-taxon chi2 per permutation
+        self.stratum_pools = stratum_pools  # {taxon_idx: pool_array}
+        self.bin_ids = bin_ids  # (N,) stratum assignment
+        self.diagnostics = diagnostics  # natural/realizable strata info
 
     def as_standard_tuple(self):
         """Unpack to the 5-tuple matching PermutationTest.run() output.
@@ -79,6 +90,7 @@ class StratifiedResult:
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
 
 def run_similarity_stratified(
     alignment_array,
@@ -126,8 +138,10 @@ def run_similarity_stratified(
     # --- Derive min stratum size from N and P for Bonferroni power ---
     # Need: N / (s * P) < 0.05  =>  s > 20*N/P
     auto_min = max(2, math.ceil(20 * N / num_permutations) + 1)
-    print(f"[similarity_stratified] auto min_stratum_size={auto_min} "
-          f"(N={N}, P={num_permutations})")
+    print(
+        f"[similarity_stratified] auto min_stratum_size={auto_min} "
+        f"(N={N}, P={num_permutations})"
+    )
 
     # --- Phase 1: compute strata from evolutionary isolation ---
     name_to_stratum, diag = msa_strata(
@@ -155,29 +169,34 @@ def run_similarity_stratified(
         p_recommended = math.ceil(20 * N / s_min) + 1
 
     # Report strata
-    print(f"[similarity_stratified] natural strata: {n_natural}, "
-          f"realizable strata (at P={num_permutations}): {n_realizable}")
+    print(
+        f"[similarity_stratified] natural strata: {n_natural}, "
+        f"realizable strata (at P={num_permutations}): {n_realizable}"
+    )
     if n_natural > n_realizable and p_recommended is not None:
-        print(f"[similarity_stratified] NOTE: {n_natural} natural strata "
-              f"detected but only {n_realizable} realizable at "
-              f"P={num_permutations}. To realize all strata, use "
-              f"P>={p_recommended}.")
+        print(
+            f"[similarity_stratified] NOTE: {n_natural} natural strata "
+            f"detected but only {n_realizable} realizable at "
+            f"P={num_permutations}. To realize all strata, use "
+            f"P>={p_recommended}."
+        )
 
     # Convert name->stratum dict to index arrays
     n_strata = max(name_to_stratum.values()) + 1
-    bin_ids = np.array(
-        [name_to_stratum[n] for n in taxon_names], dtype=int
-    )
+    bin_ids = np.array([name_to_stratum[n] for n in taxon_names], dtype=int)
     bins = [np.where(bin_ids == k)[0] for k in range(n_strata)]
     bins = [b for b in bins if len(b) > 0]
     bin_sizes = [len(b) for b in bins]
 
-    print(f"[similarity_stratified] {len(bins)} realizable strata, "
-          f"sizes={bin_sizes}")
+    print(
+        f"[similarity_stratified] {len(bins)} realizable strata, " f"sizes={bin_sizes}"
+    )
 
     # --- Phase 2: global-baseline stratified permutation ---
     chi2_matrix = permutation_test._permute_and_calculate_chi2(
-        alignment_array, chi_square_calculator, strata_indices=bins,
+        alignment_array,
+        chi_square_calculator,
+        strata_indices=bins,
     )
 
     # --- Phase 3: build per-stratum null pools ---
@@ -199,9 +218,7 @@ def run_similarity_stratified(
         "natural_stratum_sizes": natural_stratum_sizes,
         "p_recommended": p_recommended,
         "min_stratum_size_auto": auto_min,
-        "name_to_stratum": {
-            str(k): int(v) for k, v in name_to_stratum.items()
-        },
+        "name_to_stratum": {str(k): int(v) for k, v in name_to_stratum.items()},
     }
 
     return StratifiedResult(
