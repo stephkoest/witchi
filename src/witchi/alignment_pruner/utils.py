@@ -78,13 +78,19 @@ def write_score_dict_to_tsv(dictionary, file_name):
 
 
 def _robust_zscore(observed, null_pool):
-    """Compute a robust Z-score using median and MAD of the null pool."""
+    """Compute a robust Z-score using mean centering and MAD scaling.
+
+    Centering on the mean (not median) ensures consistency between
+    conditional (per-alignment permutation) and marginal (simulation)
+    null distributions, because the mean has the tower property while
+    the median does not.
+    """
+    mean = np.mean(null_pool)
     median = np.median(null_pool)
     mad = np.median(np.abs(null_pool - median))
     if mad == 0:
-        return 0.0 if observed == median else np.sign(observed - median) * np.inf
-    # 0.6745 is the MAD-to-SD consistency constant for normal distributions
-    return (observed - median) / (mad / 0.6745)
+        return 0.0 if observed == mean else np.sign(observed - mean) * np.inf
+    return (observed - mean) / (mad / 0.6745)
 
 
 def make_score_dict(

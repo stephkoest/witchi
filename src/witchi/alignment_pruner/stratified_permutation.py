@@ -12,12 +12,21 @@ stratum.
 
 Key design choices
 ------------------
-- **Global-baseline permutation**: permute within strata on the full
-  alignment, compute chi2 against global expected frequencies.  Observed
-  and null chi2 measure the same thing (deviation from global composition).
+- **Per-stratum chi2**: each taxon's chi2 is computed against its own
+  stratum's expected frequencies, not global.  This eliminates the
+  stratum-global offset that causes Jensen's-inequality inflation when
+  combined with within-stratum permutation (observed and null chi2 share
+  the same reference frame).
 - **Per-stratum p-values**: each taxon's p-value is computed against its
   own stratum's null pool, then Bonferroni-corrected by N.  Prevents
   cross-stratum contamination from fat-tailed long-branch strata.
+- **Mean-centred robust Z-scores**: Z = (x - mean) / (1.4826 * MAD).
+  Mean centering is required because the mean has the tower property
+  (consistent across conditional and marginal nulls) while the median
+  does not.
+- **Global chi2 for pruning**: column scoring (delta-chi2) still uses
+  global expected frequencies — pruning needs a common reference across
+  all taxa.
 - **Pooled null for pruning**: the full (P*N) pooled null is used as the
   Wasserstein pruning target.  Its fat-tailed shape correctly represents
   the true null on an uneven tree.
