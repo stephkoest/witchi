@@ -98,31 +98,19 @@ def make_score_dict(
     permutated_per_row_chi2,
     empirical_pvalues,
     alignment,
-    per_taxon_pools=None,
     name_to_stratum=None,
 ):
     """Make a dictionary of chi-squared scores for each row in the alignment.
 
-    Parameters
-    ----------
-    per_taxon_pools : dict or None
-        If provided, maps taxon index to its stratum's null pool.
-        Each taxon's robust Z-score is computed against its own pool.
-        If None, the global pooled null is used for all taxa.
+    Z-scores are always computed against the pooled null so that all taxa
+    are on a common, dataset-wide scale regardless of stratum assignment.
     """
     per_row_chi2 = np.array(per_row_chi2)
     row_names = [record.id for record in alignment]
 
     zscores = np.array(
         [
-            _robust_zscore(
-                per_row_chi2[i],
-                (
-                    per_taxon_pools[i]
-                    if per_taxon_pools is not None
-                    else permutated_per_row_chi2
-                ),
-            )
+            _robust_zscore(per_row_chi2[i], permutated_per_row_chi2)
             for i in range(len(per_row_chi2))
         ]
     )

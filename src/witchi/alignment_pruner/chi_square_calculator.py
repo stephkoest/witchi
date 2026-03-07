@@ -168,6 +168,47 @@ class ChiSquareCalculator:
 
         return dict(enumerate(chi2_differences))
 
+    def calculate_row_zscore_wasserstein(
+        self, expected_values, count_rows_array, null_z_quantiles, null_z_mean, null_z_scale
+    ):
+        """Wasserstein-1 distance between observed per-taxon Z-scores and null Z distribution.
+
+        Converts per-taxon chi² to Z-scores using the pooled null parameters,
+        then compares quantiles against the null Z quantiles.
+        """
+        per_row_chi2 = self.calculate_row_chi2(expected_values, count_rows_array)
+        z_scores = (per_row_chi2 - null_z_mean) / null_z_scale
+        K = len(null_z_quantiles)
+        positions = np.linspace(0, 1, K + 2)[1:-1]
+        obs_z_quantiles = np.quantile(z_scores, positions)
+        return float(np.mean(np.abs(obs_z_quantiles - null_z_quantiles)))
+
+    def calculate_wasserstein_zscore_difference(
+        self, count_rows_array, alignment_array, wasserstein, null_z_quantiles, null_z_mean, null_z_scale
+    ):
+        """Calculate the wasserstein Z-score difference for each column."""
+
+        def compute_row_zscore_wasserstein_difference(col_idx):
+            col_count = count_rows_array - self.calculate_row_counts(
+                alignment_array[:, col_idx, np.newaxis]
+            )
+            return self.calculate_row_zscore_wasserstein(
+                self.calculate_expected_observed(col_count),
+                col_count,
+                null_z_quantiles,
+                null_z_mean,
+                null_z_scale,
+            )
+
+        chi2_differences = wasserstein - np.array(
+            Parallel(n_jobs=self.num_workers)(
+                delayed(compute_row_zscore_wasserstein_difference)(col_idx)
+                for col_idx in range(alignment_array.shape[1])
+            )
+        )
+
+        return dict(enumerate(chi2_differences))
+
     def calculate_quartic_chi2_difference(
         self, count_rows_array, alignment_array, initial_global_chi2
     ):

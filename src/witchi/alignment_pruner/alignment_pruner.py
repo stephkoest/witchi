@@ -79,10 +79,26 @@ class AlignmentPruner:
             )
         )
 
-        # Compress pooled null to quantiles for Wasserstein pruning
-        K = min(200, len(permutated_per_row_chi2))
+        # Precompute Z-score parameters from pooled null (consistent with _robust_zscore)
+        self._null_z_mean = float(np.mean(permutated_per_row_chi2))
+        _median = float(np.median(permutated_per_row_chi2))
+        _mad = float(np.median(np.abs(permutated_per_row_chi2 - _median)))
+        self._null_z_scale = _mad / 0.6745
+
+        # Compress null Z-scores to quantiles for Wasserstein pruning.
+        # For stratified strategy, target the stratified null (tree-aware shape);
+        # for standard, target the standard null.
+        if (
+            self.strategy == "similarity_stratified"
+            and self.permutation_test._stratified_result is not None
+        ):
+            target_null = self.permutation_test._stratified_result.pooled_null
+        else:
+            target_null = permutated_per_row_chi2
+        null_z = (target_null - self._null_z_mean) / self._null_z_scale
+        K = min(200, len(null_z))
         positions = np.linspace(0, 1, K + 2)[1:-1]
-        self._null_quantiles = np.quantile(permutated_per_row_chi2, positions)
+        self._null_z_quantiles = np.quantile(null_z, positions)
 
         pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(
             alignment_array,
@@ -126,7 +142,6 @@ class AlignmentPruner:
             permutated_per_row_chi2,
             empirical_pvalues,
             alignment,
-            per_taxon_pools=self.permutation_test._stratum_pools,
             name_to_stratum=name_to_stratum,
         )
         output_score_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
@@ -192,11 +207,13 @@ class AlignmentPruner:
         count_rows_array,
         permutated_per_row_chi2,
     ):
-        wasserstein = self.chi_square_calculator.calculate_row_chi2_wasserstein(
-            expected_observed, count_rows_array, self._null_quantiles
+        wasserstein = self.chi_square_calculator.calculate_row_zscore_wasserstein(
+            expected_observed, count_rows_array,
+            self._null_z_quantiles, self._null_z_mean, self._null_z_scale,
         )
-        chi2_differences = self.chi_square_calculator.calculate_wasserstein_difference(
-            count_rows_array, alignment_array, wasserstein, self._null_quantiles
+        chi2_differences = self.chi_square_calculator.calculate_wasserstein_zscore_difference(
+            count_rows_array, alignment_array, wasserstein,
+            self._null_z_quantiles, self._null_z_mean, self._null_z_scale,
         )
         return wasserstein, chi2_differences
 

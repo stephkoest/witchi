@@ -1,7 +1,7 @@
 import numpy as np
 from joblib import Parallel, delayed
 
-from .utils import write_score_dict_to_tsv, make_score_dict
+from .utils import write_score_dict_to_tsv, make_score_dict, _robust_zscore
 
 
 class PermutationTest:
@@ -11,6 +11,7 @@ class PermutationTest:
         self.num_workers = num_workers_permute
         self.permutations = permutations
         self._stratified_result = None
+        self._stratum_z_pools = None
 
     def calc_empirical_pvalue(
         self, per_row_chi2, permutated_per_row_chi2, per_taxon_pools=None
@@ -22,24 +23,32 @@ class PermutationTest:
         per_row_chi2 : np.ndarray or scalar
             Observed per-taxon chi² (array) or alignment-level chi² (scalar).
         permutated_per_row_chi2 : np.ndarray
-            Pooled null distribution (used when per_taxon_pools is None).
+            Standard pooled null distribution.
         per_taxon_pools : dict or None
-            If provided, maps taxon index (int) to its stratum's null pool
-            array.  Each taxon is compared against its own pool instead of
-            the single pooled null.
+            Fallback per-stratum chi² pools (used when _stratum_z_pools
+            is not available).
+
+        When _stratum_z_pools is set (similarity_stratified), per-taxon
+        p-values compare observed Z-scores (against the standard null)
+        with per-stratum null Z distributions (stratified null,
+        Z-standardised with the stratified pooled mean/MAD).
         """
         empirical_p_list = []
         # check if array, indicating per taxon chi2 scores
         if isinstance(per_row_chi2, np.ndarray):
-            for i in range(len(per_row_chi2)):
-                pool = (
-                    per_taxon_pools[i]
-                    if per_taxon_pools is not None
-                    else permutated_per_row_chi2
-                )
-                empirical_p = (np.sum(pool >= per_row_chi2[i]) / len(pool)) * len(
-                    per_row_chi2
-                )
+            n_taxa = len(per_row_chi2)
+            for i in range(n_taxa):
+                if self._stratum_z_pools is not None and i in self._stratum_z_pools:
+                    z_obs = _robust_zscore(per_row_chi2[i], permutated_per_row_chi2)
+                    z_pool = self._stratum_z_pools[i]
+                    empirical_p = (np.sum(z_pool >= z_obs) / len(z_pool)) * n_taxa
+                else:
+                    pool = (
+                        per_taxon_pools[i]
+                        if per_taxon_pools is not None
+                        else permutated_per_row_chi2
+                    )
+                    empirical_p = (np.sum(pool >= per_row_chi2[i]) / len(pool)) * n_taxa
                 empirical_p = min(max(empirical_p, 0.0), 1.0)
                 empirical_p_list.append(empirical_p)
         # if not array, indicating total alignment chi2 scores
@@ -124,6 +133,22 @@ class PermutationTest:
             return self._stratified_result.stratum_pools
         return None
 
+    def _precompute_stratum_z_pools(self):
+        """Z-standardise per-stratum null pools using the stratified pooled mean/MAD.
+
+        Each stratum's chi² pool is converted to Z-scores on a common scale
+        (centered at 0).  These are compared against observed Z-scores
+        (computed against the standard null) in calc_empirical_pvalue().
+        """
+        stratified_pooled = self._stratified_result.pooled_null
+        mean = np.mean(stratified_pooled)
+        median = np.median(stratified_pooled)
+        mad = np.median(np.abs(stratified_pooled - median))
+        scale = mad / 0.6745 if mad > 0 else 1.0
+        self._stratum_z_pools = {}
+        for idx, pool in self._stratified_result.stratum_pools.items():
+            self._stratum_z_pools[idx] = (pool - mean) / scale
+
     def compute_null(
         self,
         alignment_array,
@@ -134,9 +159,10 @@ class PermutationTest:
         """Compute the permutation null distribution.
 
         For standard: bulk column permutation (all taxa exchangeable).
-        For similarity_stratified: within-stratum permutation with global
-        baseline chi2.  Stores the StratifiedResult internally so that
-        per-stratum pools are available via calc_empirical_pvalue().
+        For similarity_stratified: runs both standard and stratified
+        permutations.  The standard null is returned (used for observed
+        Z-scores and Wasserstein target).  The stratified null provides
+        per-stratum Z pools for empirical p-value estimation.
 
         Parameters
         ----------
@@ -153,15 +179,23 @@ class PermutationTest:
         if strategy == "similarity_stratified":
             from .stratified_permutation import run_similarity_stratified
 
+            # Standard permutation — baseline for observed Z-scores
+            print("Running standard permutation for Z-score baseline.")
+            standard_tuple = self.run(alignment_array, chi_square_calculator)
+
+            # Stratified permutation — per-stratum null for p-values
             self._stratified_result = run_similarity_stratified(
                 alignment_array,
                 alignment,
                 chi_square_calculator,
                 permutation_test=self,
             )
-            return self._stratified_result.as_standard_tuple()
+            self._precompute_stratum_z_pools()
+
+            return standard_tuple
         else:
             self._stratified_result = None
+            self._stratum_z_pools = None
             return self.run(alignment_array, chi_square_calculator)
 
     def run_test(
@@ -282,7 +316,6 @@ class PermutationTest:
             permutated_per_row_chi2,
             empirical_pvalues,
             alignment,
-            per_taxon_pools=self._stratum_pools,
             name_to_stratum=name_to_stratum,
         )
         # check for significant rows
