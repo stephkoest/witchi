@@ -4,6 +4,35 @@ from joblib import Parallel, delayed
 from .utils import write_score_dict_to_tsv, make_score_dict
 
 
+def _freedman_lane_chi2(count_rows_array, strata_indices):
+    """Compute per-taxon chi2 with Freedman-Lane recentering.
+
+    Uses (observed - stratum_expected)^2 / global_expected per stratum.
+    All strata are guaranteed to have >= 2 taxa (enforced by auto_min).
+    """
+    C, N = count_rows_array.shape
+    total_per_char = count_rows_array.sum(axis=1)
+    grand_total = total_per_char.sum()
+    global_freq = total_per_char / grand_total
+    taxon_totals = count_rows_array.sum(axis=0)
+    global_expected = global_freq[:, np.newaxis] * taxon_totals[np.newaxis, :]
+    safe_denom = np.where(global_expected > 0, global_expected, 1.0)
+
+    per_row_chi2 = np.zeros(N, dtype=np.float64)
+
+    for s_indices in strata_indices:
+        stratum_counts = count_rows_array[:, s_indices]
+        stratum_total = stratum_counts.sum(axis=1)
+        stratum_freq = stratum_total / stratum_total.sum()
+        stratum_expected = (
+            stratum_freq[:, np.newaxis] * taxon_totals[s_indices][np.newaxis, :]
+        )
+        fl_chi2 = (stratum_counts - stratum_expected) ** 2 / safe_denom[:, s_indices]
+        per_row_chi2[s_indices] = fl_chi2.sum(axis=0)
+
+    return per_row_chi2
+
+
 class PermutationTest:
     def __init__(self, num_workers_permute, permutations):
         self.is_dna = None
@@ -69,12 +98,19 @@ class PermutationTest:
             count_rows_array = chi_square_calculator.calculate_row_counts(
                 permuted_array
             )
-            expected_observed = chi_square_calculator.calculate_expected_observed(
-                count_rows_array
-            )
-            per_row_chi2 = chi_square_calculator.calculate_row_chi2(
-                expected_observed, count_rows_array
-            )
+            if strata_indices is not None:
+                per_row_chi2 = _freedman_lane_chi2(
+                    count_rows_array, strata_indices
+                )
+            else:
+                expected_observed = (
+                    chi_square_calculator.calculate_expected_observed(
+                        count_rows_array
+                    )
+                )
+                per_row_chi2 = chi_square_calculator.calculate_row_chi2(
+                    expected_observed, count_rows_array
+                )
             return per_row_chi2
 
         results = Parallel(n_jobs=self.num_workers)(
