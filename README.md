@@ -134,6 +134,12 @@ witchi test --file alignment.fasta --format fasta --permutations 100 --num_worke
 witchi prune --file alignment.fasta --format fasta --max_residue_pruned 50 --permutations 100 --pruning_algorithm wasserstein --strategy similarity_stratified
 ```
 
+### Validating stratification
+To verify that stratification does not inflate the null on your dataset, add `--diagnose`. This runs standard permutation alongside stratified and compares the two null distributions:
+```bash
+witchi test --file alignment.fasta --format fasta --permutations 100 --strategy similarity_stratified --diagnose
+```
+
 ## License
 witchi is licensed under the MIT License.
 

@@ -188,7 +188,12 @@ class PermutationTest:
             return self.run(alignment_array, chi_square_calculator)
 
     def run_test(
-        self, alignment_file, alignment_format, create_output=False, strategy="standard"
+        self,
+        alignment_file,
+        alignment_format,
+        create_output=False,
+        strategy="standard",
+        diagnose=False,
     ):
         """Run the permutation test on an alignment."""
         from .alignment_reader import AlignmentReader
@@ -224,8 +229,12 @@ class PermutationTest:
             row_expected_observed, row_counts
         )
 
-        # --- Stratification diagnostic (automatic for stratified) ---
-        if strategy == "similarity_stratified" and self._stratified_result is not None:
+        # --- Stratification diagnostic (opt-in via --diagnose) ---
+        if (
+            diagnose
+            and strategy == "similarity_stratified"
+            and self._stratified_result is not None
+        ):
             from .stratification_diagnostic import (
                 compare_null_distributions,
                 print_diagnostic,

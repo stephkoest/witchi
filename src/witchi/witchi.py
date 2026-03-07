@@ -108,6 +108,13 @@ def main():
         "column permutation within evolutionary-isolation strata, "
         "correcting for uneven trees. Default is standard.",
     )
+    test_parser.add_argument(
+        "--diagnose",
+        action="store_true",
+        help="Run standard permutation alongside stratified to validate "
+        "that stratification does not inflate the null. Only applies "
+        "when --strategy similarity_stratified is used.",
+    )
 
     args = parser.parse_args()
 
@@ -134,6 +141,7 @@ def main():
             alignment_format=args.format,
             create_output=args.create_output,
             strategy=args.strategy,
+            diagnose=args.diagnose,
         )
 
 
