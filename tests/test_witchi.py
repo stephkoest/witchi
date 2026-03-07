@@ -141,8 +141,9 @@ class TestStratifiedPermutation(unittest.TestCase):
 
         names = [rec.id for rec in self.alignment]
         raw_seqs = [str(rec.seq) for rec in self.alignment]
-        result, diag = msa_strata(raw_seqs, names, min_stratum_size=2,
-                                  return_diagnostics=True)
+        result, diag = msa_strata(
+            raw_seqs, names, min_stratum_size=2, return_diagnostics=True
+        )
         self.assertIn("n_strata", diag)
         self.assertIn("n_strata_natural", diag)
         self.assertIn("isolation", diag)
@@ -164,14 +165,18 @@ class TestStratifiedPermutation(unittest.TestCase):
         from witchi.alignment_pruner.stratified_permutation import (
             run_similarity_stratified,
         )
+
         pt = PermutationTest(num_workers_permute=1, permutations=self.P)
         return run_similarity_stratified(
-            self.alignment_array, self.alignment, self.chi_calc,
+            self.alignment_array,
+            self.alignment,
+            self.chi_calc,
             permutation_test=pt,
         )
 
     def test_run_similarity_stratified_returns_stratified_result(self):
         from witchi.alignment_pruner.stratified_permutation import StratifiedResult
+
         result = self._make_stratified_result()
         self.assertIsInstance(result, StratifiedResult)
 
@@ -192,8 +197,7 @@ class TestStratifiedPermutation(unittest.TestCase):
 
     def test_stratified_result_stratum_pools_cover_all_taxa(self):
         result = self._make_stratified_result()
-        self.assertEqual(set(result.stratum_pools.keys()),
-                         set(range(self.N)))
+        self.assertEqual(set(result.stratum_pools.keys()), set(range(self.N)))
         for pool in result.stratum_pools.values():
             self.assertGreater(len(pool), 0)
 
@@ -214,7 +218,9 @@ class TestStratifiedPermutation(unittest.TestCase):
         tester = PermutationTest(num_workers_permute=1, permutations=self.P)
         pooled = result.as_standard_tuple()[4]
         pvals = tester.calc_empirical_pvalue(
-            obs, pooled, per_taxon_pools=result.stratum_pools,
+            obs,
+            pooled,
+            per_taxon_pools=result.stratum_pools,
         )
         self.assertEqual(len(pvals), self.N)
         for p in pvals:
@@ -226,8 +232,10 @@ class TestStratifiedPermutation(unittest.TestCase):
     def test_compute_null_stratified_returns_5tuple(self):
         tester = PermutationTest(num_workers_permute=1, permutations=self.P)
         result = tester.compute_null(
-            self.alignment_array, self.chi_calc,
-            strategy="similarity_stratified", alignment=self.alignment,
+            self.alignment_array,
+            self.chi_calc,
+            strategy="similarity_stratified",
+            alignment=self.alignment,
         )
         self.assertIsInstance(result, tuple)
         self.assertEqual(len(result), 5)
@@ -235,23 +243,29 @@ class TestStratifiedPermutation(unittest.TestCase):
     def test_compute_null_stores_stratified_result(self):
         tester = PermutationTest(num_workers_permute=1, permutations=self.P)
         tester.compute_null(
-            self.alignment_array, self.chi_calc,
-            strategy="similarity_stratified", alignment=self.alignment,
+            self.alignment_array,
+            self.chi_calc,
+            strategy="similarity_stratified",
+            alignment=self.alignment,
         )
         self.assertIsNotNone(tester._stratified_result)
 
     def test_calc_empirical_pvalue_uses_strata_after_compute_null(self):
         tester = PermutationTest(num_workers_permute=1, permutations=self.P)
         _, _, _, _, pooled = tester.compute_null(
-            self.alignment_array, self.chi_calc,
-            strategy="similarity_stratified", alignment=self.alignment,
+            self.alignment_array,
+            self.chi_calc,
+            strategy="similarity_stratified",
+            alignment=self.alignment,
         )
         rows = self.chi_calc.calculate_row_counts(self.alignment_array)
         exp = self.chi_calc.calculate_expected_observed(rows)
         obs = self.chi_calc.calculate_row_chi2(exp, rows)
 
         pvals = tester.calc_empirical_pvalue(
-            obs, pooled, per_taxon_pools=tester._stratum_pools,
+            obs,
+            pooled,
+            per_taxon_pools=tester._stratum_pools,
         )
         self.assertEqual(len(pvals), self.N)
         for p in pvals:
@@ -264,11 +278,15 @@ class TestStratifiedPermutation(unittest.TestCase):
         tester_strat = PermutationTest(num_workers_permute=1, permutations=self.P)
 
         _, _, _, _, pooled_std = tester_std.compute_null(
-            self.alignment_array, self.chi_calc, strategy="standard",
+            self.alignment_array,
+            self.chi_calc,
+            strategy="standard",
         )
         _, _, _, _, pooled_strat = tester_strat.compute_null(
-            self.alignment_array, self.chi_calc,
-            strategy="similarity_stratified", alignment=self.alignment,
+            self.alignment_array,
+            self.chi_calc,
+            strategy="similarity_stratified",
+            alignment=self.alignment,
         )
 
         rows = self.chi_calc.calculate_row_counts(self.alignment_array)
@@ -276,10 +294,14 @@ class TestStratifiedPermutation(unittest.TestCase):
         obs = self.chi_calc.calculate_row_chi2(exp, rows)
 
         pvals_std = tester_std.calc_empirical_pvalue(
-            obs, pooled_std, per_taxon_pools=tester_std._stratum_pools,
+            obs,
+            pooled_std,
+            per_taxon_pools=tester_std._stratum_pools,
         )
         pvals_strat = tester_strat.calc_empirical_pvalue(
-            obs, pooled_strat, per_taxon_pools=tester_strat._stratum_pools,
+            obs,
+            pooled_strat,
+            per_taxon_pools=tester_strat._stratum_pools,
         )
 
         for pvals in (pvals_std, pvals_strat):
@@ -400,15 +422,28 @@ class TestStratificationDiagnostic(unittest.TestCase):
         from witchi.alignment_pruner.stratification_diagnostic import (
             diagnose_stratification_validity,
         )
+
         result = diagnose_stratification_validity(
-            self.alignment_array, self.alignment, self.chi_calc,
-            permutations=20, num_workers=1,
+            self.alignment_array,
+            self.alignment,
+            self.chi_calc,
+            permutations=20,
+            num_workers=1,
         )
         expected_keys = {
-            "valid", "warning", "inflation_z", "signal_consumed",
-            "observed_chi2", "p_standard", "p_stratified", "concordant",
-            "standard_median", "stratified_median",
-            "n_strata", "trivial", "alpha",
+            "valid",
+            "warning",
+            "inflation_z",
+            "signal_consumed",
+            "observed_chi2",
+            "p_standard",
+            "p_stratified",
+            "concordant",
+            "standard_median",
+            "stratified_median",
+            "n_strata",
+            "trivial",
+            "alpha",
         }
         self.assertEqual(set(result.keys()), expected_keys)
         self.assertIsInstance(result["valid"], bool)
@@ -424,9 +459,13 @@ class TestStratificationDiagnostic(unittest.TestCase):
         from witchi.alignment_pruner.stratification_diagnostic import (
             diagnose_stratification_validity,
         )
+
         result = diagnose_stratification_validity(
-            self.alignment_array, self.alignment, self.chi_calc,
-            permutations=20, num_workers=1,
+            self.alignment_array,
+            self.alignment,
+            self.chi_calc,
+            permutations=20,
+            num_workers=1,
         )
         for key in ("p_standard", "p_stratified"):
             self.assertGreaterEqual(result[key], 0.0)
@@ -437,9 +476,13 @@ class TestStratificationDiagnostic(unittest.TestCase):
         from witchi.alignment_pruner.stratification_diagnostic import (
             diagnose_stratification_validity,
         )
+
         result = diagnose_stratification_validity(
-            self.alignment_array, self.alignment, self.chi_calc,
-            permutations=20, num_workers=1,
+            self.alignment_array,
+            self.alignment,
+            self.chi_calc,
+            permutations=20,
+            num_workers=1,
         )
         if result["n_strata"] <= 1:
             self.assertTrue(result["trivial"])
@@ -454,13 +497,17 @@ class TestStratificationDiagnostic(unittest.TestCase):
         from witchi.alignment_pruner.stratification_diagnostic import (
             diagnose_stratification_validity,
         )
+
         result = diagnose_stratification_validity(
-            self.alignment_array, self.alignment, self.chi_calc,
-            permutations=50, num_workers=1,
+            self.alignment_array,
+            self.alignment,
+            self.chi_calc,
+            permutations=50,
+            num_workers=1,
         )
         alpha = result["alpha"]
-        expected_concordant = (
-            (result["p_standard"] < alpha) == (result["p_stratified"] < alpha)
+        expected_concordant = (result["p_standard"] < alpha) == (
+            result["p_stratified"] < alpha
         )
         self.assertEqual(result["concordant"], expected_concordant)
         self.assertEqual(result["valid"], result["concordant"])
@@ -470,9 +517,13 @@ class TestStratificationDiagnostic(unittest.TestCase):
         from witchi.alignment_pruner.stratification_diagnostic import (
             diagnose_stratification_validity,
         )
+
         result = diagnose_stratification_validity(
-            self.alignment_array, self.alignment, self.chi_calc,
-            permutations=20, num_workers=1,
+            self.alignment_array,
+            self.alignment,
+            self.chi_calc,
+            permutations=20,
+            num_workers=1,
         )
         self.assertGreater(result["observed_chi2"], 0.0)
 
@@ -481,9 +532,13 @@ class TestStratificationDiagnostic(unittest.TestCase):
         from witchi.alignment_pruner.stratification_diagnostic import (
             diagnose_stratification_validity,
         )
+
         result = diagnose_stratification_validity(
-            self.alignment_array, self.alignment, self.chi_calc,
-            permutations=50, num_workers=1,
+            self.alignment_array,
+            self.alignment,
+            self.chi_calc,
+            permutations=50,
+            num_workers=1,
         )
         expected_warning = (
             result["inflation_z"] >= 3.0 and result["signal_consumed"] >= 0.10
