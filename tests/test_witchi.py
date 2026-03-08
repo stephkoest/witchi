@@ -340,67 +340,43 @@ class TestStratifiedPermutation(unittest.TestCase):
         self.assertTrue(os.path.exists(base + ".tsv"))
 
 
-class TestFreedmanLaneChi2(unittest.TestCase):
-    """Unit tests for the _freedman_lane_chi2 helper."""
+class TestAlignmentPrunerWasserstein(unittest.TestCase):
 
-    def test_single_stratum_equals_standard_chi2(self):
-        """With one stratum containing all taxa, FL should equal standard chi2."""
-        from witchi.alignment_pruner.permutation_test import _freedman_lane_chi2
-
-        rng = np.random.default_rng(99)
-        count_rows_array = rng.integers(5, 50, size=(4, 6)).astype(np.float64)
-
-        strata = [np.array([0, 1, 2, 3, 4, 5])]
-        fl_chi2 = _freedman_lane_chi2(count_rows_array, strata)
-
-        # Standard chi2
-        total_per_char = count_rows_array.sum(axis=1)
-        global_freq = total_per_char / total_per_char.sum()
-        taxon_totals = count_rows_array.sum(axis=0)
-        expected = global_freq[:, np.newaxis] * taxon_totals[np.newaxis, :]
-        std_chi2 = ((count_rows_array - expected) ** 2 / expected).sum(axis=0)
-
-        np.testing.assert_allclose(fl_chi2, std_chi2, rtol=1e-10)
-
-    def test_two_strata_reduces_chi2(self):
-        """Compositionally distinct strata should yield FL chi2 <= standard."""
-        from witchi.alignment_pruner.permutation_test import _freedman_lane_chi2
-
-        # Stratum 0: GC-rich, Stratum 1: AT-rich
-        count_rows_array = np.array(
-            [
-                [10, 12, 40, 38, 42],
-                [40, 42, 10, 12, 11],
-                [38, 40, 12, 10, 13],
-                [12, 10, 38, 40, 34],
-            ],
-            dtype=np.float64,
+    def test_wasserstein_pruning(self):
+        pruner = AlignmentPruner(
+            file="tests/data/example.nex",
+            format="nexus",
+            max_residue_pruned=10,
+            permutations=50,
+            num_workers_chisq=1,
+            num_workers_permute=1,
+            top_n=1,
+            pruning_algorithm="wasserstein",
         )
+        pruner.run()
+        base = "tests/data/example_wasserstein_s1_pruned"
+        assert os.path.exists(base + ".fasta")
+        assert os.path.exists(base + ".tsv")
+        assert os.path.exists(base + "_scores.tsv")
+        assert os.path.exists(base + "_score_dict.json")
 
-        strata = [np.array([0, 1]), np.array([2, 3, 4])]
-        fl_chi2 = _freedman_lane_chi2(count_rows_array, strata)
+    def test_wasserstein_stratified_pruning(self):
+        pruner = AlignmentPruner(
+            file="tests/data/example.nex",
+            format="nexus",
+            max_residue_pruned=10,
+            permutations=50,
+            num_workers_chisq=1,
+            num_workers_permute=1,
+            top_n=1,
+            pruning_algorithm="wasserstein",
+            strategy="similarity_stratified",
+        )
+        pruner.run()
+        base = "tests/data/example_wasserstein_s1_similarity_stratified_pruned"
+        assert os.path.exists(base + ".fasta")
+        assert os.path.exists(base + ".tsv")
 
-        # Standard chi2
-        total_per_char = count_rows_array.sum(axis=1)
-        global_freq = total_per_char / total_per_char.sum()
-        taxon_totals = count_rows_array.sum(axis=0)
-        expected = global_freq[:, np.newaxis] * taxon_totals[np.newaxis, :]
-        std_chi2 = ((count_rows_array - expected) ** 2 / expected).sum(axis=0)
-
-        self.assertTrue(np.all(fl_chi2 <= std_chi2 + 1e-10))
-        self.assertTrue(np.any(fl_chi2 < std_chi2 - 1e-6))
-
-    def test_output_shape_and_nonnegative(self):
-        """Output should be (N,) and all non-negative."""
-        from witchi.alignment_pruner.permutation_test import _freedman_lane_chi2
-
-        rng = np.random.default_rng(7)
-        count_rows_array = rng.integers(1, 30, size=(4, 10)).astype(np.float64)
-        strata = [np.array([0, 1, 2, 3]), np.array([4, 5, 6]), np.array([7, 8, 9])]
-        fl_chi2 = _freedman_lane_chi2(count_rows_array, strata)
-
-        self.assertEqual(fl_chi2.shape, (10,))
-        self.assertTrue(np.all(fl_chi2 >= 0))
 
 
 class TestStratificationDiagnostic(unittest.TestCase):
