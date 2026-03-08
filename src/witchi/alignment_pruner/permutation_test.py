@@ -288,7 +288,7 @@ class PermutationTest:
 
         upper_chi_quantile = np.percentile(per_row_chi2, 95)
 
-        median_z = _robust_zscore(np.mean(per_row_chi2), permutated_per_row_chi2)
+        median_z = _robust_zscore(np.median(per_row_chi2), permutated_per_row_chi2)
         q95_z = _robust_zscore(upper_chi_quantile, permutated_per_row_chi2)
 
         print(
@@ -298,8 +298,8 @@ class PermutationTest:
         )
         print(
             f"Alignment mean taxa chi2score: {(np.mean(per_row_chi2)):.2f} | "
-            f"Permutations median taxa chi2score: {np.median(permutated_per_row_chi2):.2f} | "
-            f"Mean Z-score: {median_z:.2f} | "
+            f"Permutations mean taxa chi2score: {np.mean(permutated_per_row_chi2):.2f} | "
+            f"Median Z-score: {median_z:.2f} | "
             f"q95 Z-score: {q95_z:.2f}"
         )
         # calculate zscores and empirical p-values for each row
