@@ -70,13 +70,17 @@ class AlignmentPruner:
         self.permutation_test = PermutationTest(
             self.num_workers_permute, self.permutations
         )
-        sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
-            self.permutation_test.compute_null(
-                alignment_array,
-                self.chi_square_calculator,
-                strategy=self.strategy,
-                alignment=alignment,
-            )
+        (
+            sums,
+            maxes,
+            upper_box_threshold,
+            upper_threshold,
+            permutated_per_row_chi2,
+        ) = self.permutation_test.compute_null(
+            alignment_array,
+            self.chi_square_calculator,
+            strategy=self.strategy,
+            alignment=alignment,
         )
 
         # Precompute Z-score parameters from pooled null (consistent with _robust_zscore)
@@ -209,12 +213,21 @@ class AlignmentPruner:
         permutated_per_row_chi2,
     ):
         wasserstein = self.chi_square_calculator.calculate_row_zscore_wasserstein(
-            expected_observed, count_rows_array,
-            self._null_z_quantiles, self._null_z_mean, self._null_z_scale,
+            expected_observed,
+            count_rows_array,
+            self._null_z_quantiles,
+            self._null_z_mean,
+            self._null_z_scale,
         )
-        chi2_differences = self.chi_square_calculator.calculate_wasserstein_zscore_difference(
-            count_rows_array, alignment_array, wasserstein,
-            self._null_z_quantiles, self._null_z_mean, self._null_z_scale,
+        chi2_differences = (
+            self.chi_square_calculator.calculate_wasserstein_zscore_difference(
+                count_rows_array,
+                alignment_array,
+                wasserstein,
+                self._null_z_quantiles,
+                self._null_z_mean,
+                self._null_z_scale,
+            )
         )
         return wasserstein, chi2_differences
 
