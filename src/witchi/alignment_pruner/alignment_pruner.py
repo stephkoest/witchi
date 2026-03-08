@@ -105,6 +105,7 @@ class AlignmentPruner:
             sums,
             upper_threshold,
             permutated_per_row_chi2,
+            alignment=alignment,
         )
 
         pruned_sequences = self.update_sequences(alignment, pruned_alignment_array)
@@ -223,6 +224,7 @@ class AlignmentPruner:
         sums,
         upper_threshold,
         permutated_per_row_chi2,
+        alignment=None,
     ):
         """Recursively prune the alignment array."""
         prune_dict = {}
@@ -253,6 +255,14 @@ class AlignmentPruner:
             if iteration == 0:
                 score_dict["before_permuted"] = permutated_per_row_chi2
                 score_dict["before_real"] = per_row_chi2
+                sr = self.permutation_test._stratified_result
+                if sr is not None:
+                    score_dict["stratified_permuted"] = sr.pooled_null
+                    score_dict["stratification"] = {
+                        "taxon_names": [rec.id for rec in alignment],
+                        "bin_ids": sr.bin_ids.tolist(),
+                        "n_strata": int(sr.diagnostics["n_strata_realizable"]),
+                    }
             else:
                 # only write to prune_dict after the first pruning iteration
                 for col in top_n_indices:
