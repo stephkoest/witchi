@@ -6,7 +6,7 @@ WitChi is an analysis and pruning tool designed to evaluate and reduce compositi
 ![Logo_v2](https://github.com/user-attachments/assets/2af4f0ff-cbbe-48be-a50f-b45de3061b40)
 
 ## Key Features
-* **Recursive Chi-Square Pruning**: Iteratively removes biased columns based on Chi-square statistics.
+* **Iterative Chi-Square Pruning**: Iteratively removes biased columns based on Chi-square statistics.
 * **Multiple Pruning Algorithms**: Supports squared, Wasserstein, and quartic delta Chi-square pruning.
 * **Permutation-Based Thresholding**: Empirically estimates unbiased Chi-square score distributions using permutation tests.
 * **Parallel Processing**: Leverages multi-threading for computational efficiency.
@@ -15,7 +15,7 @@ WitChi is an analysis and pruning tool designed to evaluate and reduce compositi
 
 ![Fig1_v1](https://github.com/user-attachments/assets/aa3a2589-11ce-42e7-b988-e7ed4a5dda1e)
 
-Overview of the WitChi workflows for detecting and reducing compositional bias in multiple sequence alignments. (A) The TEST workflow (gray background) computes taxon-specific χ² scores and establishes an empirical null distribution by column permutation (100x), allowing the identification of biased taxa. The PRUNE workflow (green background) iteratively removes alignment columns with the highest Δχ², followed by a convergence check to determine whether pruning should continue or stop. (B) Example observed MSA and one corresponding column- permuted MSA, illustrating how taxon-specific biases are homogenised while preserving global composition. The bar plot on the right compares taxon χ² scores between the observedl and permuted alignments. (C) Left: Δχ² scores per alignment column, with the most biased column flagged for removal (dashed box). Right: Density distributions of taxon-specific χ² scores before and during the pruning loop, showing how pruning shifts scores toward the null distribution. Once no further biased taxa are detected, pruning converges to an unbiased alignment (right panel).
+Overview of the WitChi workflows for detecting and reducing compositional bias in multiple sequence alignments. (A) The TEST workflow (gray background) computes taxon-specific χ² scores and establishes an empirical null distribution by column permutation (100x default, configurable), allowing the identification of biased taxa. The PRUNE workflow (green background) iteratively removes alignment columns with the highest Δχ², followed by a convergence check to determine whether pruning should continue or stop. (B) Example observed MSA and one corresponding column- permuted MSA, illustrating how taxon-specific biases are homogenised while preserving global composition. The bar plot on the right compares taxon χ² scores between the observedl and permuted alignments. (C) Left: Δχ² scores per alignment column, with the most biased column flagged for removal (dashed box). Right: Density distributions of taxon-specific χ² scores before and during the pruning loop, showing how pruning shifts scores toward the null distribution. Once no further biased taxa are detected, pruning converges to an unbiased alignment (right panel).
 
 ## Installation
 **1. Clone the repository:**
@@ -40,7 +40,7 @@ pip install -e .
 As an example we use the compositionally biased 5 taxon dataset from Foster et al. 2022 (PMID: 36083446). The dataset is available in the `tests` directory.
 Run the tests using unittest:
 ```bash
-python -m unittest discover -s tests -p 'test_witchi.py'
+pytest tests/
 ```
 
 ## Usage
@@ -61,6 +61,8 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--num_workers_permute`: Number of CPU threads for permutation parallelization (default: 1).
 - `--top_n`: Number of top biased columns to prune per iteration (default: 1).
 - `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic).
+- `--touchdown`: Enable touchdown mode (reduces top_n near convergence).
+- `--strategy`: Permutation strategy (standard, similarity_stratified; default: standard).
 
 ### Permutation Testing
 Run permutation tests to establish empirical Chi-square distributions:
@@ -73,11 +75,13 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 - `--format`: Alignment format (default: fasta).
 - `--num_workers_permute`: Number of CPU threads (default: 1).
 - `--permutations`: Number of permutations (default: 100).
-- `--create_output`: Flag to create output file with z-scores and pseudo p-values per taxon.
+- `--create_output`: Flag to create output file with z-scores and empirical p-values per taxon.
+- `--strategy`: Permutation strategy (standard, similarity_stratified; default: standard).
+- `--diagnose`: Run diagnostic comparing standard vs stratified null distributions.
 
 ## Pruning Algorithms
 - **Squared Pruning**: Prioritizes columns with the highest delta Chi-square score.
-- **Wasserstein Pruning**: Guides pruning by minimizing Wasserstein distance to the unbiased distribution.
+- **Wasserstein Pruning**: Guides pruning by minimizing Wasserstein-1 distance between observed and null Z-score quantiles.
 - **Quartic Pruning**: Targets columns that maximize squared taxon delta Chi-square score differences.
 
 ## Output
@@ -96,7 +100,7 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 **3. Pruning Loop:**
 
   * Iteratively removes the most biased columns based on the selected algorithm.
-  * Monitors progress using metrics like Wasserstein distance.
+  * Checks convergence via empirical p-values at each iteration.
 
 **4. Final Output:**
 
@@ -108,7 +112,7 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 witchi test --file example.nex --format "nexus"
 ```
 You can run this on multiple subsets of the dataset, with different taxon sampling for example.
-Once tyou have chose datasets you want to prune, go to the next step.
+Once you have chosen datasets you want to prune, go to the next step.
 
 2. Prune up to 50 residues of the alignment with Wasserstein distance guidance:
 ```bash
@@ -122,7 +126,7 @@ By default, WitChi permutes columns across all taxa equally (standard strategy).
 The `--strategy similarity_stratified` option addresses this by:
 1. **Clustering taxa into strata** based on evolutionary isolation (k-NN distance in a seed-projection space, inspired by the mBed embedding of [Blackshields et al. 2010](https://doi.org/10.1186/1748-7188-5-21)).
 2. **Permuting columns within each stratum**, preserving the correlation structure imposed by shared ancestry.
-3. **Freedman-Lane recentering**: computing null chi-squared values from within-stratum residuals weighted by global frequencies. This removes the inflation that would otherwise arise when a stratum's composition differs from the global average, producing a tighter and more accurate null distribution.
+3. **Per-stratum expected frequencies**: computing chi-squared values using stratum-specific expected frequencies (not global), producing a tighter null that reflects within-stratum composition.
 
 ### Testing with stratified permutation
 ```bash
