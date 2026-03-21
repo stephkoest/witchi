@@ -63,6 +63,7 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic).
 - `--touchdown`: Enable touchdown mode (reduces top_n near convergence).
 - `--strategy`: Permutation strategy (standard, similarity_stratified; default: standard).
+- `--strict`: Enforce pruning until all taxa are individually unbiased (ignores alignment-level p-value threshold).
 
 ### Permutation Testing
 Run permutation tests to establish empirical Chi-square distributions:
