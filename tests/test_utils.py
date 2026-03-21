@@ -92,7 +92,10 @@ class TestMakeScoreDict(unittest.TestCase):
         pvalues = [0.1, 0.2]
 
         result = make_score_dict(
-            per_row_chi2, pooled_null, pvalues, alignment,
+            per_row_chi2,
+            pooled_null,
+            pvalues,
+            alignment,
         )
         self.assertEqual(len(result), 2)
         for v in result.values():
@@ -107,7 +110,10 @@ class TestMakeScoreDict(unittest.TestCase):
         name_to_stratum = {"x": 0, "y": 1}
 
         result = make_score_dict(
-            per_row_chi2, null_pool, pvalues, alignment,
+            per_row_chi2,
+            null_pool,
+            pvalues,
+            alignment,
             name_to_stratum=name_to_stratum,
         )
         for name, v in result.items():

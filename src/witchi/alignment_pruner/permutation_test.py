@@ -86,7 +86,9 @@ class PermutationTest:
                 per_row_chi2 = np.zeros(count_rows_array.shape[1], dtype=np.float64)
                 for s_indices in strata_indices:
                     s_counts = count_rows_array[:, s_indices]
-                    s_expected = chi_square_calculator.calculate_expected_observed(s_counts)
+                    s_expected = chi_square_calculator.calculate_expected_observed(
+                        s_counts
+                    )
                     per_row_chi2[s_indices] = chi_square_calculator.calculate_row_chi2(
                         s_expected, s_counts
                     )

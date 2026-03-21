@@ -62,7 +62,7 @@ class TestChiSquareCalculator(unittest.TestCase):
         expected = self.calc.calculate_expected_observed(counts)
         row_chi2 = self.calc.calculate_row_chi2(expected, counts)
         quartic = self.calc.calculate_quartic_row_global_chi2(expected, counts)
-        np.testing.assert_allclose(quartic, np.sum(row_chi2 ** 2), rtol=1e-10)
+        np.testing.assert_allclose(quartic, np.sum(row_chi2**2), rtol=1e-10)
 
     def test_wasserstein_nonnegative(self):
         counts = self.calc.calculate_row_counts(self.alignment_array)

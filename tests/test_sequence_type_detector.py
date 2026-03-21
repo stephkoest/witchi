@@ -18,7 +18,9 @@ class TestSequenceTypeDetector(unittest.TestCase):
         alignment = self._make_alignment(["ACGTACGT", "GCTAGCTA"])
         is_dna, char_set = SequenceTypeDetector.detect(alignment)
         self.assertTrue(is_dna)
-        np.testing.assert_array_equal(sorted(char_set), sorted(SequenceTypeDetector.DNA_BASES))
+        np.testing.assert_array_equal(
+            sorted(char_set), sorted(SequenceTypeDetector.DNA_BASES)
+        )
 
     def test_detect_protein(self):
         alignment = self._make_alignment(["MVLSPADKTNVK", "MWLSGEDKSNIK"])

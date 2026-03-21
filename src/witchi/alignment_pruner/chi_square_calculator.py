@@ -169,7 +169,12 @@ class ChiSquareCalculator:
         return dict(enumerate(chi2_differences))
 
     def calculate_row_zscore_wasserstein(
-        self, expected_values, count_rows_array, null_z_quantiles, null_z_mean, null_z_scale
+        self,
+        expected_values,
+        count_rows_array,
+        null_z_quantiles,
+        null_z_mean,
+        null_z_scale,
     ):
         """Wasserstein-1 distance between observed per-taxon Z-scores and null Z distribution.
 
@@ -184,7 +189,13 @@ class ChiSquareCalculator:
         return float(np.mean(np.abs(obs_z_quantiles - null_z_quantiles)))
 
     def calculate_wasserstein_zscore_difference(
-        self, count_rows_array, alignment_array, wasserstein, null_z_quantiles, null_z_mean, null_z_scale
+        self,
+        count_rows_array,
+        alignment_array,
+        wasserstein,
+        null_z_quantiles,
+        null_z_mean,
+        null_z_scale,
     ):
         """Calculate the wasserstein Z-score difference for each column."""
 

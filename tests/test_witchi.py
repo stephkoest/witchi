@@ -378,7 +378,6 @@ class TestAlignmentPrunerWasserstein(unittest.TestCase):
         assert os.path.exists(base + ".tsv")
 
 
-
 class TestStratificationDiagnostic(unittest.TestCase):
     """Tests for the stratification validity diagnostic."""
 
