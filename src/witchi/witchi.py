@@ -73,6 +73,12 @@ def main():
         "column permutation within evolutionary-isolation strata, "
         "correcting for uneven trees. Default is standard.",
     )
+    prune_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Enforce pruning until all taxa are individually unbiased "
+        "(ignores alignment-level p-value threshold).",
+    )
 
     test_parser = subparsers.add_parser(
         "test", help="Run permutation test on alignment."
@@ -130,6 +136,7 @@ def main():
             pruning_algorithm=args.pruning_algorithm,
             touchdown=args.touchdown,
             strategy=args.strategy,
+            strict=args.strict,
         )
         pruner.run()
     elif args.command == "test":

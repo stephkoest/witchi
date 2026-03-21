@@ -30,6 +30,7 @@ class AlignmentPruner:
         pruning_algorithm="squared",
         touchdown=False,
         strategy="standard",
+        strict=False,
     ):
         self.file = file
         self.format = format
@@ -38,6 +39,7 @@ class AlignmentPruner:
         self.num_workers_chisq = num_workers_chisq
         self.num_workers_permute = num_workers_permute
         self.touchdown = touchdown
+        self.strict = strict
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
         self.strategy = strategy
@@ -343,8 +345,12 @@ class AlignmentPruner:
                 if new_top_n < self.top_n:
                     self.top_n = new_top_n
 
-        if alignment_empirical_p >= 0.95:
-            return True, "alignment p-value"
+        if alignment_empirical_p > 0.05 and significant_count == 0:
+            return True, "convergence"
+
+        if not self.strict:
+            if alignment_empirical_p > 0.05:
+                return True, "alignment p-value"
 
         if significant_count == 0:
             return True, "no significant taxa"
