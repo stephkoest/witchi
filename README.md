@@ -78,7 +78,6 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 - `--permutations`: Number of permutations (default: 100).
 - `--create_output`: Flag to create output file with z-scores and empirical p-values per taxon.
 - `--strategy`: Permutation strategy (standard, similarity_stratified; default: standard).
-- `--diagnose`: Run diagnostic comparing standard vs stratified null distributions.
 
 ## Pruning Algorithms
 - **Squared Pruning**: Prioritizes columns with the highest delta Chi-square score.
@@ -137,12 +136,6 @@ witchi test --file alignment.fasta --format fasta --permutations 100 --num_worke
 ### Pruning with stratified permutation
 ```bash
 witchi prune --file alignment.fasta --format fasta --max_residue_pruned 50 --permutations 100 --pruning_algorithm wasserstein --strategy similarity_stratified
-```
-
-### Validating stratification
-To verify that stratification does not inflate the null on your dataset, add `--diagnose`. This runs standard permutation alongside stratified and compares the two null distributions:
-```bash
-witchi test --file alignment.fasta --format fasta --permutations 100 --strategy similarity_stratified --diagnose
 ```
 
 ## License
