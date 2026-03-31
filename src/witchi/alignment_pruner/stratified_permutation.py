@@ -175,7 +175,7 @@ def run_similarity_stratified(
             int((natural_ids == k).sum()) for k in range(n_natural)
         ]
         s_min = min(natural_stratum_sizes)
-        p_recommended = math.ceil(20 * N / s_min) + 1
+        p_recommended = math.ceil(20 * N / (s_min - 1))
 
     # Report strata
     print(

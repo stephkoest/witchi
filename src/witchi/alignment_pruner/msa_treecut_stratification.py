@@ -437,10 +437,13 @@ def msa_strata(
     edges = _build_nn_graph(proj, k_nn=n_neighbours)
     isolation = _mean_knn_distances(n, edges)
 
-    # Always compute natural strata first (unconstrained, min_s=2, K_max capped at 3)
-    natural_max_k = min(2, max_clusters) if max_clusters else 2
+    # Cap strata at 2: captures the primary evolutionary split without
+    # running into small-sample issues for permutation.
+    max_clusters = min(2, max_clusters) if max_clusters else 2
+
+    # Always compute natural strata first (unconstrained, min_s=2)
     natural_ids = _auto_strata(
-        isolation, min_stratum_size=2, max_clusters=natural_max_k
+        isolation, min_stratum_size=2, max_clusters=max_clusters
     )
 
     # If caller needs power-constrained strata, compute those too
