@@ -442,9 +442,7 @@ def msa_strata(
     max_clusters = min(2, max_clusters) if max_clusters else 2
 
     # Always compute natural strata first (unconstrained, min_s=2)
-    natural_ids = _auto_strata(
-        isolation, min_stratum_size=2, max_clusters=max_clusters
-    )
+    natural_ids = _auto_strata(isolation, min_stratum_size=2, max_clusters=max_clusters)
 
     # If caller needs power-constrained strata, compute those too
     if min_stratum_size > 2:
