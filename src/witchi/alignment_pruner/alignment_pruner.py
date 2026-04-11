@@ -451,22 +451,48 @@ class AlignmentPruner:
                 permutated_per_row_chi2,
             )
 
-            # Delta null stopping: is the best column's delta above chance?
+            # Sort candidates in descending delta order, take up to top_n
+            sorted_candidates = sorted(
+                chi2_differences.items(), key=lambda x: x[1], reverse=True
+            )[: self.top_n]
+
+            # Delta null: walk candidates and remove those above the null max.
+            # Stops at first failure within the batch, giving graceful
+            # touchdown — batch size naturally shrinks as we approach
+            # convergence. Exits the pruning loop only when rank-1 itself
+            # fails (zero columns justified in this iteration).
             if self._null_max_deltas is not None:
-                max_delta = max(chi2_differences.values())
-                delta_p = np.sum(self._null_max_deltas >= max_delta) / len(
-                    self._null_max_deltas
-                )
-                if delta_p > 0.05:
+                justified = []
+                last_p = None
+                for col, delta in sorted_candidates:
+                    last_p = np.sum(self._null_max_deltas >= delta) / len(
+                        self._null_max_deltas
+                    )
+                    if last_p > 0.05:
+                        break
+                    justified.append(col)
+
+                if not justified:
+                    max_delta = sorted_candidates[0][1]
                     print(
                         f"Pruning complete. Exiting because of delta not "
-                        f"significant (p={delta_p:.3f}, "
+                        f"significant (p={last_p:.3f}, "
                         f"max_delta={max_delta:.6f})."
                     )
                     break
 
-            # Sort the columns by the chi2 difference and get the top n columns to prune
-            top_n_indices = np.argsort(list(chi2_differences.values()))[-self.top_n :]
+                if len(justified) < len(sorted_candidates):
+                    fail_delta = sorted_candidates[len(justified)][1]
+                    print(
+                        f"  Partial batch: removing {len(justified)}/"
+                        f"{len(sorted_candidates)} columns "
+                        f"(rank {len(justified) + 1} fails at "
+                        f"p={last_p:.3f}, delta={fail_delta:.6f})"
+                    )
+            else:
+                justified = [col for col, _ in sorted_candidates]
+
+            top_n_indices = np.array(justified)
             alignment_array = np.delete(alignment_array, top_n_indices, axis=1)
             iteration += 1
 
