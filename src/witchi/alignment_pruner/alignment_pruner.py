@@ -354,16 +354,6 @@ class AlignmentPruner:
         initial_global_chi2 = None
         chi2_differences = {}
 
-        # Wasserstein trough tracking: after the loop, roll back to the
-        # W1 minimum — the point where bias removal transitions to signal
-        # destruction.  No alignment snapshots needed; we reconstruct from
-        # the original array and the truncated prune_dict.
-        is_wasserstein = self.pruning_algorithm == "wasserstein"
-        original_alignment_array = alignment_array
-        w1_min = float("inf")
-        w1_min_removed = 0
-        w1_min_per_row_chi2 = None
-
         while removed_columns_count < self.max_residue_pruned:
             stats = self._calculate_per_row_stats(alignment_array)
             count_rows_array = stats["count_rows"]
@@ -412,24 +402,6 @@ class AlignmentPruner:
             mean_z = _robust_zscore(np.mean(per_row_chi2), permutated_per_row_chi2)
             q95_z = _robust_zscore(upper_chi_quantile, permutated_per_row_chi2)
 
-            # Compute current W1 for logging and trough tracking
-            w1_str = ""
-            if is_wasserstein:
-                current_w1 = (
-                    self.chi_square_calculator.calculate_row_zscore_wasserstein(
-                        expected_observed,
-                        count_rows_array,
-                        self._null_z_quantiles,
-                        self._null_z_mean,
-                        self._null_z_scale,
-                    )
-                )
-                w1_str = f" | W1: {current_w1:.4f}"
-                if current_w1 < w1_min:
-                    w1_min = current_w1
-                    w1_min_removed = removed_columns_count
-                    w1_min_per_row_chi2 = per_row_chi2.copy()
-
             print(
                 f"Columns removed: {removed_columns_count}, "
                 f"{(removed_columns_count / self.alignment_size) * 100:.2f}% | "
@@ -437,7 +409,6 @@ class AlignmentPruner:
                 f"Mean Z-score: {mean_z:.2f} | "
                 f"q95 Z-score: {q95_z:.2f} | "
                 f"Alignment p-value: {alignment_empirical_p:.2f}"
-                f"{w1_str}"
             )
 
             if should_stop:
@@ -495,25 +466,6 @@ class AlignmentPruner:
             top_n_indices = np.array(justified)
             alignment_array = np.delete(alignment_array, top_n_indices, axis=1)
             iteration += 1
-
-        # Wasserstein trough rollback: if the W1 minimum occurred earlier
-        # than where we stopped, truncate to that point and reconstruct.
-        if is_wasserstein and w1_min_removed < len(prune_dict):
-            print(
-                f"W1 trough at {w1_min_removed} columns "
-                f"({w1_min_removed / self.alignment_size * 100:.2f}%, "
-                f"W1={w1_min:.4f}). Rolling back from {len(prune_dict)}."
-            )
-            kept_cols = list(prune_dict.keys())[:w1_min_removed]
-            prune_dict = {col: prune_dict[col] for col in kept_cols}
-            cols_to_remove = sorted(prune_dict.keys())
-            if cols_to_remove:
-                alignment_array = np.delete(
-                    original_alignment_array, cols_to_remove, axis=1
-                )
-            else:
-                alignment_array = original_alignment_array
-            per_row_chi2 = w1_min_per_row_chi2
 
         score_dict["after_real"] = per_row_chi2
         self.top_n = self.initial_top_n
