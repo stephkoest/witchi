@@ -21,6 +21,22 @@ class ChiSquareCalculator:
 
         return count_rows_array
 
+    def _single_column_counts(self, alignment_array, col_idx):
+        """Per-character per-taxon counts for a single column.
+
+        Used by the *_difference methods via the subtraction trick.
+        Unlike calculate_row_counts, this returns clean {0, 1} values
+        and never applies the zero-safety fudge — single-column
+        matrices always have zero cells (each taxon has 1 of
+        len(char_set) characters), so the +1 fudge in
+        calculate_row_counts would incorrectly add 1 to every cell and
+        corrupt the subtraction that produces reduced counts.
+        """
+        col_slice = alignment_array[:, col_idx]
+        return np.array(
+            [(col_slice == char).astype(np.int64) for char in self.char_set]
+        )
+
     def calculate_expected_observed(self, count_rows_array):
         """
         Fully vectorized calculation of expected and observed frequencies for each column in
@@ -95,8 +111,8 @@ class ChiSquareCalculator:
         """Calculate the chi-squared difference for each column based on its impact on the overall chi-squared score."""
 
         def compute_global_chi2_difference(col_idx):
-            col_count = count_rows_array - self.calculate_row_counts(
-                alignment_array[:, col_idx, np.newaxis]
+            col_count = count_rows_array - self._single_column_counts(
+                alignment_array, col_idx
             )
             return self.calculate_global_chi2(
                 self.calculate_expected_observed(col_count), col_count
@@ -125,8 +141,8 @@ class ChiSquareCalculator:
         """
 
         def compute_row_chi2_outlyingness_difference(col_idx):
-            col_count = count_rows_array - self.calculate_row_counts(
-                alignment_array[:, col_idx, np.newaxis]
+            col_count = count_rows_array - self._single_column_counts(
+                alignment_array, col_idx
             )
             return self.calculate_row_chi2_outlyingness_sum(
                 self.calculate_expected_observed(col_count),
@@ -150,8 +166,8 @@ class ChiSquareCalculator:
         """Calculate the wasserstein difference for each column based on its impact on the chi-squared score of rows."""
 
         def compute_row_chi2_wasserstein_difference(col_idx):
-            col_count = count_rows_array - self.calculate_row_counts(
-                alignment_array[:, col_idx, np.newaxis]
+            col_count = count_rows_array - self._single_column_counts(
+                alignment_array, col_idx
             )
             return self.calculate_row_chi2_wasserstein(
                 self.calculate_expected_observed(col_count),
@@ -200,8 +216,8 @@ class ChiSquareCalculator:
         """Calculate the wasserstein Z-score difference for each column."""
 
         def compute_row_zscore_wasserstein_difference(col_idx):
-            col_count = count_rows_array - self.calculate_row_counts(
-                alignment_array[:, col_idx, np.newaxis]
+            col_count = count_rows_array - self._single_column_counts(
+                alignment_array, col_idx
             )
             return self.calculate_row_zscore_wasserstein(
                 self.calculate_expected_observed(col_count),
@@ -229,8 +245,8 @@ class ChiSquareCalculator:
         """
 
         def compute_quartic_difference(col_idx):
-            col_count = count_rows_array - self.calculate_row_counts(
-                alignment_array[:, col_idx, np.newaxis]
+            col_count = count_rows_array - self._single_column_counts(
+                alignment_array, col_idx
             )
             return self.calculate_quartic_row_global_chi2(
                 self.calculate_expected_observed(col_count), col_count

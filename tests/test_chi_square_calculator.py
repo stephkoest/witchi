@@ -106,6 +106,33 @@ class TestChiSquareCalculator(unittest.TestCase):
         self.assertIsInstance(diffs, dict)
         self.assertEqual(len(diffs), self.alignment_array.shape[1])
 
+    def test_global_chi2_difference_matches_full_recomputation(self):
+        """Subtraction-trick deltas must match naive per-column recomputation.
+
+        Regression test for a bug where the single-column count path in
+        the *_difference methods routed through calculate_row_counts,
+        which applies a matrix-wide +1 zero-safety fudge whenever any
+        cell is zero (always true for a single-column slice), producing
+        deltas offset by a dataset-dependent constant.
+        """
+        full_counts = self.calc.calculate_row_counts(self.alignment_array)
+        full_expected = self.calc.calculate_expected_observed(full_counts)
+        initial = self.calc.calculate_global_chi2(full_expected, full_counts)
+
+        optimized = self.calc.calculate_global_chi2_difference(
+            full_counts, self.alignment_array, initial
+        )
+
+        for j in range(self.alignment_array.shape[1]):
+            aln_j = np.delete(self.alignment_array, j, axis=1)
+            counts_j = self.calc.calculate_row_counts(aln_j)
+            exp_j = self.calc.calculate_expected_observed(counts_j)
+            chi2_j = self.calc.calculate_global_chi2(exp_j, counts_j)
+            naive_delta_j = initial - chi2_j
+            np.testing.assert_allclose(
+                optimized[j], naive_delta_j, rtol=1e-9, atol=1e-9
+            )
+
 
 class TestChiSquareCalculatorSynthetic(unittest.TestCase):
     """Tests with synthetic data for edge cases."""
