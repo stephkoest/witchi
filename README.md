@@ -9,6 +9,7 @@ WitChi is an analysis and pruning tool designed to evaluate and reduce compositi
 * **Iterative Chi-Square Pruning**: Iteratively removes biased columns based on Chi-square statistics.
 * **Multiple Pruning Algorithms**: Supports squared, Wasserstein, and quartic delta Chi-square pruning.
 * **Permutation-Based Thresholding**: Empirically estimates unbiased Chi-square score distributions using permutation tests.
+* **Per-Column Justified Stopping**: Delta-null stopping criterion halts pruning when no individual column's bias contribution exceeds the noise ceiling — protecting phylogenetic signal from indiscriminate trimming once bias becomes diffuse.
 * **Parallel Processing**: Leverages multi-threading for computational efficiency.
 * **Modular Design**: Perform only pruning or permutation testing depending on your analysis goals.
 * **Flexible Configuration**: Adjustable parameters such as pruning depth, top N columns to prune, and permutation count.
@@ -64,6 +65,7 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--touchdown`: Enable touchdown mode (reduces top_n near convergence).
 - `--strategy`: Permutation strategy (standard, similarity_stratified; default: standard).
 - `--strict`: Enforce pruning until all taxa are individually unbiased (ignores alignment-level p-value threshold).
+- `--delta-null` / `--no-delta-null`: Enable/disable the delta-null stopping criterion (default: enabled). When enabled, WitChi also tests whether the best-ranked column's delta exceeds a permutation-based noise ceiling, and stops pruning when it doesn't.
 
 ### Permutation Testing
 Run permutation tests to establish empirical Chi-square distributions:
@@ -100,7 +102,7 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 **3. Pruning Loop:**
 
   * Iteratively removes the most biased columns based on the selected algorithm.
-  * Checks convergence via empirical p-values at each iteration.
+  * At each iteration, two stopping layers are checked: (a) alignment-level convergence via empirical p-values, and (b) the delta-null criterion — the best-ranked column's delta must exceed the noise ceiling (the maximum delta expected by chance in an unbiased alignment). Pruning stops as soon as either layer signals completion.
 
 **4. Final Output:**
 
@@ -137,6 +139,20 @@ witchi test --file alignment.fasta --format fasta --permutations 100 --num_worke
 ```bash
 witchi prune --file alignment.fasta --format fasta --max_residue_pruned 50 --permutations 100 --pruning_algorithm wasserstein --strategy similarity_stratified
 ```
+
+## Delta-Null Stopping Criterion
+
+Traditional stopping asks "is the alignment still biased?" via the alignment-level empirical p-value. This is an omnibus test: a significant answer says bias exists, but doesn't say *which* columns carry it. Once the concentrated bias carriers have been pruned, residual bias is often spread diffusely across many columns, none of which individually stands out. Continuing to prune at that point removes whichever column happens to rank highest — trading phylogenetic signal for the appearance of cleaning up bias the pruner can no longer meaningfully locate.
+
+WitChi adds a per-column justification test that complements the alignment-level criterion:
+
+1. **Null distribution of column deltas**. During the permutation test phase, 20 additional permuted alignments (fresh seeds, independent of the main null) are scored with the active pruning algorithm. The maximum per-column delta from each permutation forms the "noise ceiling" distribution — the largest delta an unbiased alignment would be expected to produce.
+
+2. **Per-iteration check (adaptive walk)**. At each iteration, WitChi walks the top-`top_n` candidate columns in descending delta order. Each candidate is tested against the noise ceiling: columns whose delta exceeds it are removed, and the walk stops at the first candidate that fails. Pruning halts only when the rank-1 candidate itself fails — at that point, no column can be individually justified as a bias carrier.
+
+3. **Graceful touchdown**. When the alignment is strongly biased, full batches of `top_n` columns are removed per iteration. As convergence approaches, batches naturally shrink (e.g. 20 → 13 → 0) until rank-1 fails. No manual threshold is needed — the test itself dictates when to slow down.
+
+Supported for all three pruning algorithms (squared, quartic, wasserstein) and both permutation strategies (standard, similarity_stratified). Enabled by default; disable with `--no-delta-null` if you want the classic alignment-level-only stopping behaviour.
 
 ## License
 witchi is licensed under the MIT License.
