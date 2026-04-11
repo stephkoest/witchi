@@ -55,16 +55,6 @@ def main():
         default="quartic",
         help="Pruning algorithm to use: squared, quartic, wasserstein",
     )
-    # add touchdown
-    prune_parser.add_argument(
-        "--touchdown",
-        action="store_true",
-        help="If flag is set, Touchdown mode is activated (experimental!). "
-        "Consider setting top_n to around 1-2%% of the original alignment length.\n"
-        "The number of "
-        "columns to prune will be reduced to 0.1%% of the original alignment length "
-        "per iteration after a threshold of 99.0%% is reached. ",
-    )
     prune_parser.add_argument(
         "--strategy",
         default="standard",
@@ -134,7 +124,6 @@ def main():
             num_workers_permute=args.num_workers_permute,
             top_n=args.top_n,
             pruning_algorithm=args.pruning_algorithm,
-            touchdown=args.touchdown,
             strategy=args.strategy,
             strict=args.strict,
             delta_null=args.delta_null,

@@ -30,7 +30,6 @@ class AlignmentPruner:
         num_workers_permute=1,
         top_n=10,
         pruning_algorithm="squared",
-        touchdown=False,
         strategy="standard",
         strict=False,
         delta_null=True,
@@ -41,7 +40,6 @@ class AlignmentPruner:
         self.permutations = permutations
         self.num_workers_chisq = num_workers_chisq
         self.num_workers_permute = num_workers_permute
-        self.touchdown = touchdown
         self.strict = strict
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
@@ -129,8 +127,6 @@ class AlignmentPruner:
         parts = [f"_{self.pruning_algorithm}_s{self.top_n}"]
         if self.strategy != "standard":
             parts.append(f"_{self.strategy}")
-        if self.touchdown:
-            parts.append("_touchdown")
         parts.append("_pruned.fasta")
         suffix = "".join(parts)
         output_alignment_pruned_file = os.path.splitext(self.file)[0] + suffix
@@ -405,6 +401,13 @@ class AlignmentPruner:
         initial_global_chi2 = None
         chi2_differences = {}
 
+        # Reactive touchdown rollback state: keep a reference to the
+        # original alignment so we can reconstruct it (via prune_dict)
+        # when rolling back the overshoot batch. in_touchdown flips True
+        # after the first rollback so we don't rollback a second time.
+        original_alignment_array = alignment_array
+        in_touchdown = False
+
         while removed_columns_count < self.max_residue_pruned:
             stats = self._calculate_per_row_stats(alignment_array)
             count_rows_array = stats["count_rows"]
@@ -461,6 +464,50 @@ class AlignmentPruner:
                 f"q95 Z-score: {q95_z:.2f} | "
                 f"Alignment p-value: {alignment_empirical_p:.2f}"
             )
+
+            # Reactive touchdown rollback: if an alignment-level criterion
+            # would stop us and we haven't touched down yet, undo the last
+            # batch and continue with a 10x smaller top_n. This bounds the
+            # overshoot and gives the delta-null adaptive walk room to
+            # engage in the final small batches. Fires at most once.
+            target_top_n = max(1, self.initial_top_n // 10)
+            if (
+                should_stop
+                and not in_touchdown
+                and self.top_n > target_top_n
+                and len(top_n_indices) > 0
+            ):
+                n_recent = len(top_n_indices)
+                recent_cols = list(prune_dict.keys())[-n_recent:]
+                for col in recent_cols:
+                    del prune_dict[col]
+                removed_columns_count -= n_recent
+
+                cols_to_remove = sorted(prune_dict.keys())
+                if cols_to_remove:
+                    alignment_array = np.delete(
+                        original_alignment_array, cols_to_remove, axis=1
+                    )
+                else:
+                    alignment_array = original_alignment_array
+                original_indices = [
+                    i
+                    for i in range(original_alignment_array.shape[1])
+                    if i not in set(cols_to_remove)
+                ]
+
+                self.top_n = target_top_n
+                in_touchdown = True
+                top_n_indices = []
+
+                print(
+                    f"Touchdown: alignment-level overshoot "
+                    f"(reason='{stop_reason}', "
+                    f"alignment_p={alignment_empirical_p:.3f}). "
+                    f"Rolled back {n_recent} columns, reduced top_n to "
+                    f"{target_top_n}, resuming pruning."
+                )
+                continue
 
             if should_stop:
                 print(f"Pruning complete. Exiting because of {stop_reason}.")
@@ -529,12 +576,6 @@ class AlignmentPruner:
         Check whether pruning should stop based on empirical p-values.
         Returns: (should_stop: bool, reason: str, significant_count: int)
         """
-        if self.touchdown:
-            if stats["median"] <= np.percentile(permuted_chi2, 99):
-                new_top_n = int(self.alignment_size / 1000)
-                if new_top_n < self.top_n:
-                    self.top_n = new_top_n
-
         if alignment_empirical_p > 0.05 and significant_count == 0:
             return True, "convergence"
 

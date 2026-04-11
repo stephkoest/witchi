@@ -426,21 +426,21 @@ class TestDeltaNull(unittest.TestCase):
         pruner = self._make_pruner(algorithm="squared")
         self._setup_pruner_for_null_deltas(pruner)
         pruner._compute_null_deltas(self._setup_pruner_for_null_deltas(pruner))
-        self.assertEqual(pruner._null_max_deltas.shape, (20,))
+        self.assertEqual(pruner._null_max_deltas.shape, (100,))
         self.assertTrue(np.all(pruner._null_max_deltas >= 0))
 
     def test_compute_null_deltas_shape_quartic(self):
         pruner = self._make_pruner(algorithm="quartic")
         self._setup_pruner_for_null_deltas(pruner)
         pruner._compute_null_deltas(self._setup_pruner_for_null_deltas(pruner))
-        self.assertEqual(pruner._null_max_deltas.shape, (20,))
+        self.assertEqual(pruner._null_max_deltas.shape, (100,))
         self.assertTrue(np.all(pruner._null_max_deltas >= 0))
 
     def test_compute_null_deltas_shape_wasserstein(self):
         pruner = self._make_pruner(algorithm="wasserstein")
         self._setup_pruner_for_null_deltas(pruner)
         pruner._compute_null_deltas(self._setup_pruner_for_null_deltas(pruner))
-        self.assertEqual(pruner._null_max_deltas.shape, (20,))
+        self.assertEqual(pruner._null_max_deltas.shape, (100,))
         self.assertTrue(np.all(pruner._null_max_deltas >= 0))
 
     def test_delta_null_disabled(self):
@@ -455,7 +455,7 @@ class TestDeltaNull(unittest.TestCase):
         )
         pruner.run()
         self.assertIsNotNone(pruner._null_max_deltas)
-        self.assertEqual(pruner._null_max_deltas.shape, (20,))
+        self.assertEqual(pruner._null_max_deltas.shape, (100,))
 
 
 if __name__ == "__main__":
