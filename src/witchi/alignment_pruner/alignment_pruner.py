@@ -249,14 +249,38 @@ class AlignmentPruner:
         using the active pruning algorithm, then record the maximum delta.
         The resulting distribution tests whether observed deltas during
         pruning are distinguishable from chance.
+
+        The permutation scheme matches each algorithm's "unbiased"
+        reference:
+          - Wasserstein in stratified mode uses within-stratum
+            permutation, matching its stratified Z-quantile target.
+          - Wasserstein in standard mode and chi-based algorithms
+            (squared, quartic) in any strategy use standard permutation.
+            Chi-based always targets global unbiased composition, so
+            its null alignments should be maximally randomized regardless
+            of strategy.
+
+        Consequence: chi-based under similarity_stratified catches
+        within-stratum compositional bias, while Wasserstein under
+        similarity_stratified preserves it as tree structure. Use
+        chi-based if you suspect within-stratum bias and want it
+        removed.
         """
         p_null = self._DELTA_NULL_PERMUTATIONS
         max_deltas = np.empty(p_null, dtype=np.float64)
 
-        # Determine strata for stratified permutation
+        # Only Wasserstein in stratified mode uses within-stratum
+        # permutation for its delta null; chi-based algorithms always use
+        # standard permutation so their null represents "unbiased global
+        # composition" regardless of strategy.
         strata_indices = None
         sr = self.permutation_test._stratified_result
-        if self.strategy == "similarity_stratified" and sr is not None:
+        use_stratified_perm = (
+            self.strategy == "similarity_stratified"
+            and self.pruning_algorithm == "wasserstein"
+            and sr is not None
+        )
+        if use_stratified_perm:
             bin_ids = sr.bin_ids
             n_strata = int(np.max(bin_ids)) + 1
             strata_indices = [np.where(bin_ids == k)[0] for k in range(n_strata)]
