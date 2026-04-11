@@ -18,7 +18,7 @@ from .utils import (
 
 
 class AlignmentPruner:
-    _DELTA_NULL_PERMUTATIONS = 20
+    _DELTA_NULL_PERMUTATIONS = 100
 
     def __init__(
         self,
