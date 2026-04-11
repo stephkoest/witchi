@@ -79,6 +79,14 @@ def main():
         help="Enforce pruning until all taxa are individually unbiased "
         "(ignores alignment-level p-value threshold).",
     )
+    prune_parser.add_argument(
+        "--delta-null",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Test per-column delta significance against a permutation null. "
+        "Stops pruning when no column's delta exceeds chance expectation. "
+        "Use --no-delta-null to disable.",
+    )
 
     test_parser = subparsers.add_parser(
         "test", help="Run permutation test on alignment."
@@ -129,6 +137,7 @@ def main():
             touchdown=args.touchdown,
             strategy=args.strategy,
             strict=args.strict,
+            delta_null=args.delta_null,
         )
         pruner.run()
     elif args.command == "test":

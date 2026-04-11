@@ -18,6 +18,8 @@ from .utils import (
 
 
 class AlignmentPruner:
+    _DELTA_NULL_PERMUTATIONS = 20
+
     def __init__(
         self,
         file,
@@ -31,6 +33,7 @@ class AlignmentPruner:
         touchdown=False,
         strategy="standard",
         strict=False,
+        delta_null=True,
     ):
         self.file = file
         self.format = format
@@ -43,9 +46,11 @@ class AlignmentPruner:
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
         self.strategy = strategy
+        self.delta_null = delta_null
         self.chi_square_calculator = None
         self.alignment_size = None
         self.initial_top_n = self.top_n
+        self._null_max_deltas = None
         self.prune_strategies = {
             "squared": self._prune_squared,
             "quartic": self._prune_quartic,
@@ -105,6 +110,10 @@ class AlignmentPruner:
         K = min(200, len(null_z))
         positions = np.linspace(0, 1, K + 2)[1:-1]
         self._null_z_quantiles = np.quantile(null_z, positions)
+
+        if self.delta_null:
+            print("Computing null delta distribution for stopping criterion...")
+            self._compute_null_deltas(alignment_array)
 
         pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(
             alignment_array,
@@ -233,6 +242,96 @@ class AlignmentPruner:
         )
         return wasserstein, chi2_differences
 
+    def _compute_null_deltas(self, alignment_array):
+        """Compute null distribution of max per-column delta scores.
+
+        For each of P_null permuted alignments, compute per-column deltas
+        using the active pruning algorithm, then record the maximum delta.
+        The resulting distribution tests whether observed deltas during
+        pruning are distinguishable from chance.
+        """
+        p_null = self._DELTA_NULL_PERMUTATIONS
+        max_deltas = np.empty(p_null, dtype=np.float64)
+
+        # Determine strata for stratified permutation
+        strata_indices = None
+        sr = self.permutation_test._stratified_result
+        if self.strategy == "similarity_stratified" and sr is not None:
+            bin_ids = sr.bin_ids
+            n_strata = int(np.max(bin_ids)) + 1
+            strata_indices = [np.where(bin_ids == k)[0] for k in range(n_strata)]
+            strata_indices = [s for s in strata_indices if len(s) >= 2]
+
+        for i in range(p_null):
+            # Fresh seeds, offset past the existing permutation seeds
+            iter_seed = 12345 + self.permutations + i
+            rng = np.random.default_rng(iter_seed)
+
+            if strata_indices is None:
+                permuted_array = np.apply_along_axis(
+                    rng.permutation, 0, alignment_array
+                )
+            else:
+                permuted_array = alignment_array.copy()
+                for s_indices in strata_indices:
+                    sub = permuted_array[s_indices, :]
+                    permuted_array[s_indices, :] = np.apply_along_axis(
+                        rng.permutation, 0, sub
+                    )
+
+            count_rows = self.chi_square_calculator.calculate_row_counts(permuted_array)
+            expected = self.chi_square_calculator.calculate_expected_observed(
+                count_rows
+            )
+
+            if self.pruning_algorithm == "squared":
+                initial = self.chi_square_calculator.calculate_global_chi2(
+                    expected, count_rows
+                )
+                deltas = self.chi_square_calculator.calculate_global_chi2_difference(
+                    count_rows, permuted_array, initial
+                )
+            elif self.pruning_algorithm == "quartic":
+                initial = self.chi_square_calculator.calculate_quartic_row_global_chi2(
+                    expected, count_rows
+                )
+                deltas = self.chi_square_calculator.calculate_quartic_chi2_difference(
+                    count_rows, permuted_array, initial
+                )
+            elif self.pruning_algorithm == "wasserstein":
+                initial = self.chi_square_calculator.calculate_row_zscore_wasserstein(
+                    expected,
+                    count_rows,
+                    self._null_z_quantiles,
+                    self._null_z_mean,
+                    self._null_z_scale,
+                )
+                deltas = (
+                    self.chi_square_calculator.calculate_wasserstein_zscore_difference(
+                        count_rows,
+                        permuted_array,
+                        initial,
+                        self._null_z_quantiles,
+                        self._null_z_mean,
+                        self._null_z_scale,
+                    )
+                )
+            else:
+                raise ValueError(f"Unknown pruning algorithm: {self.pruning_algorithm}")
+
+            max_deltas[i] = max(deltas.values())
+            print(
+                f"  Null delta permutation {i + 1}/{p_null}: "
+                f"max_delta={max_deltas[i]:.6f}"
+            )
+
+        self._null_max_deltas = max_deltas
+        print(
+            f"Null max-delta distribution (n={p_null}): "
+            f"mean={np.mean(max_deltas):.6f}, "
+            f"p95={np.percentile(max_deltas, 95):.6f}"
+        )
+
     def recursive_prune(
         self,
         alignment_array,
@@ -351,6 +450,20 @@ class AlignmentPruner:
                 count_rows_array,
                 permutated_per_row_chi2,
             )
+
+            # Delta null stopping: is the best column's delta above chance?
+            if self._null_max_deltas is not None:
+                max_delta = max(chi2_differences.values())
+                delta_p = np.sum(self._null_max_deltas >= max_delta) / len(
+                    self._null_max_deltas
+                )
+                if delta_p > 0.05:
+                    print(
+                        f"Pruning complete. Exiting because of delta not "
+                        f"significant (p={delta_p:.3f}, "
+                        f"max_delta={max_delta:.6f})."
+                    )
+                    break
 
             # Sort the columns by the chi2 difference and get the top n columns to prune
             top_n_indices = np.argsort(list(chi2_differences.values()))[-self.top_n :]
