@@ -250,21 +250,31 @@ class AlignmentPruner:
         The resulting distribution tests whether observed deltas during
         pruning are distinguishable from chance.
 
-        The permutation scheme matches each algorithm's "unbiased"
-        reference:
+        Permutation scheme matches each algorithm's "unbiased" reference:
           - Wasserstein in stratified mode uses within-stratum
-            permutation, matching its stratified Z-quantile target.
+            permutation, producing null alignments whose Z-distribution
+            shape matches the multimodal stratified target.
           - Wasserstein in standard mode and chi-based algorithms
             (squared, quartic) in any strategy use standard permutation.
-            Chi-based always targets global unbiased composition, so
-            its null alignments should be maximally randomized regardless
-            of strategy.
+
+        Z-anchor scheme differs by algorithm:
+          - Chi-based uses the pipeline-wide standard anchors
+            (self._null_z_mean, self._null_z_scale).
+          - Wasserstein in standard mode uses the same pipeline-wide
+            standard anchors.
+          - Wasserstein in stratified mode uses the main stratified
+            permutation test's pool stats as Z-anchors — mean and
+            MAD/0.6745 of ``_stratified_result.pooled_null``. This
+            centres the delta-null on the stratified reference frame
+            so that preserved within-stratum bias in the delta-null
+            permutations does not inflate the null-max-delta
+            distribution.
 
         Consequence: chi-based under similarity_stratified catches
-        within-stratum compositional bias, while Wasserstein under
-        similarity_stratified preserves it as tree structure. Use
-        chi-based if you suspect within-stratum bias and want it
-        removed.
+        within-stratum compositional bias directly. Wasserstein under
+        similarity_stratified is measured against the stratified pool's
+        own location and scale, isolating shape-level perturbation as
+        the noise reference.
         """
         p_null = self._DELTA_NULL_PERMUTATIONS
         max_deltas = np.empty(p_null, dtype=np.float64)
@@ -285,6 +295,23 @@ class AlignmentPruner:
             n_strata = int(np.max(bin_ids)) + 1
             strata_indices = [np.where(bin_ids == k)[0] for k in range(n_strata)]
             strata_indices = [s for s in strata_indices if len(s) >= 2]
+
+        # Wasserstein anchor selection:
+        #   - Stratified mode: use the main stratified permutation
+        #     test's pool stats (computed earlier in compute_null and
+        #     stored on sr.pooled_null). This centres the delta-null on
+        #     the stratified reference frame so preserved within-stratum
+        #     bias does not push the null deltas into the biased regime.
+        #   - Standard mode: keep the pipeline-wide standard anchors.
+        if use_stratified_perm:
+            strat_pool = sr.pooled_null
+            wass_null_z_mean = float(np.mean(strat_pool))
+            _strat_median = float(np.median(strat_pool))
+            _strat_mad = float(np.median(np.abs(strat_pool - _strat_median)))
+            wass_null_z_scale = _strat_mad / 0.6745 if _strat_mad > 0 else 1.0
+        else:
+            wass_null_z_mean = self._null_z_mean
+            wass_null_z_scale = self._null_z_scale
 
         for i in range(p_null):
             # Fresh seeds, offset past the existing permutation seeds
@@ -327,8 +354,8 @@ class AlignmentPruner:
                     expected,
                     count_rows,
                     self._null_z_quantiles,
-                    self._null_z_mean,
-                    self._null_z_scale,
+                    wass_null_z_mean,
+                    wass_null_z_scale,
                 )
                 deltas = (
                     self.chi_square_calculator.calculate_wasserstein_zscore_difference(
@@ -336,8 +363,8 @@ class AlignmentPruner:
                         permuted_array,
                         initial,
                         self._null_z_quantiles,
-                        self._null_z_mean,
-                        self._null_z_scale,
+                        wass_null_z_mean,
+                        wass_null_z_scale,
                     )
                 )
             else:
