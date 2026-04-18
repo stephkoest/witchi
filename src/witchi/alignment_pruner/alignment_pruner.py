@@ -246,51 +246,31 @@ class AlignmentPruner:
         The resulting distribution tests whether observed deltas during
         pruning are distinguishable from chance.
 
-        Permutation scheme matches each algorithm's "unbiased" reference:
-          - Wasserstein in stratified mode uses within-stratum
-            permutation, producing null alignments whose Z-distribution
-            shape matches the multimodal stratified target.
-          - Wasserstein in standard mode and chi-based algorithms
-            (squared, quartic) in any strategy use standard permutation.
+        All algorithms use standard column permutation for the delta-null
+        regardless of strategy. Within-stratum permutation was tested for
+        Wasserstein in similarity_stratified mode but produced an unstable
+        noise ceiling at small stratum sizes (the combinatorial space of
+        a size-s stratum is only s!); broader sampling from the full taxon
+        set gives a stable max-delta distribution.
 
-        Z-anchor scheme differs by algorithm:
-          - Chi-based uses the pipeline-wide standard anchors
+        Z-anchors for Wasserstein still track strategy:
+          - Standard mode: pipeline-wide standard anchors
             (self._null_z_mean, self._null_z_scale).
-          - Wasserstein in standard mode uses the same pipeline-wide
-            standard anchors.
-          - Wasserstein in stratified mode uses the main stratified
-            permutation test's pool stats as Z-anchors — mean and
-            MAD/0.6745 of ``_stratified_result.pooled_null``. This
-            centres the delta-null on the stratified reference frame
-            so that preserved within-stratum bias in the delta-null
-            permutations does not inflate the null-max-delta
-            distribution.
-
-        Consequence: chi-based under similarity_stratified catches
-        within-stratum compositional bias directly. Wasserstein under
-        similarity_stratified is measured against the stratified pool's
-        own location and scale, isolating shape-level perturbation as
-        the noise reference.
+          - Stratified mode: mean and MAD/0.6745 of the stratified
+            permutation test's ``_stratified_result.pooled_null`` — so
+            observed deltas (computed on the stratified reference frame)
+            and null deltas share the same location and scale.
         """
         p_null = self._DELTA_NULL_PERMUTATIONS
         max_deltas = np.empty(p_null, dtype=np.float64)
 
-        # Only Wasserstein in stratified mode uses within-stratum
-        # permutation for its delta null; chi-based algorithms always use
-        # standard permutation so their null represents "unbiased global
-        # composition" regardless of strategy.
         strata_indices = None
         sr = self.permutation_test._stratified_result
-        use_stratified_perm = (
+        use_stratified_anchors = (
             self.strategy == "similarity_stratified"
             and self.pruning_algorithm == "wasserstein"
             and sr is not None
         )
-        if use_stratified_perm:
-            bin_ids = sr.bin_ids
-            n_strata = int(np.max(bin_ids)) + 1
-            strata_indices = [np.where(bin_ids == k)[0] for k in range(n_strata)]
-            strata_indices = [s for s in strata_indices if len(s) >= 2]
 
         # Wasserstein anchor selection:
         #   - Stratified mode: use the main stratified permutation
@@ -299,7 +279,7 @@ class AlignmentPruner:
         #     the stratified reference frame so preserved within-stratum
         #     bias does not push the null deltas into the biased regime.
         #   - Standard mode: keep the pipeline-wide standard anchors.
-        if use_stratified_perm:
+        if use_stratified_anchors:
             strat_pool = sr.pooled_null
             wass_null_z_mean = float(np.mean(strat_pool))
             _strat_median = float(np.median(strat_pool))
