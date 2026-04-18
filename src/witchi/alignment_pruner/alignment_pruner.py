@@ -413,7 +413,6 @@ class AlignmentPruner:
             count_rows_array = stats["count_rows"]
             expected_observed = stats["expected_observed"]
             per_row_chi2 = stats["per_row_chi2"]
-            upper_chi_quantile = stats["q95"]
             global_chi2 = stats["sum"]
 
             alignment_empirical_p, significant_count = self._calc_empirical_pvals(
@@ -453,15 +452,13 @@ class AlignmentPruner:
                 stats, permutated_per_row_chi2, alignment_empirical_p, significant_count
             )
 
-            mean_z = _robust_zscore(np.mean(per_row_chi2), permutated_per_row_chi2)
-            q95_z = _robust_zscore(upper_chi_quantile, permutated_per_row_chi2)
+            alignment_z = _robust_zscore(np.sum(per_row_chi2), sums)
 
             print(
                 f"Columns removed: {removed_columns_count}, "
                 f"{(removed_columns_count / self.alignment_size) * 100:.2f}% | "
                 f"Biased taxa permutation: {significant_count} | "
-                f"Mean Z-score: {mean_z:.2f} | "
-                f"q95 Z-score: {q95_z:.2f} | "
+                f"Alignment Z-score: {alignment_z:.2f} | "
                 f"Alignment p-value: {alignment_empirical_p:.2f}"
             )
 
@@ -619,7 +616,6 @@ class AlignmentPruner:
             "per_row_chi2": per_row_chi2,
             "median": np.median(per_row_chi2),
             "mean": np.mean(per_row_chi2),
-            "q95": np.percentile(per_row_chi2, 95),
             "sum": np.sum(per_row_chi2),
         }
 
