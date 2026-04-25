@@ -42,7 +42,8 @@ def main():
         type=int,
         default=1,
         help="Number of parallel workers (cores) to use for permutation testing, default is 1.\n"
-        "Scales poorly with more than 4 workers.",
+        "Controls both the main permutation test and the delta-null permutation loop.\n"
+        "Main test plateaus past ~4 workers; delta-null scales near-linearly to 18+.",
     )
     prune_parser.add_argument(
         "--top_n",

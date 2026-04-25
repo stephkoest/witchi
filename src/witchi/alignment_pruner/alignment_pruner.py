@@ -3,6 +3,7 @@ import os
 import time
 from Bio.Seq import Seq
 from Bio.Align import MultipleSeqAlignment
+from joblib import Parallel, delayed
 
 from .chi_square_calculator import ChiSquareCalculator
 from .permutation_test import PermutationTest
@@ -262,9 +263,7 @@ class AlignmentPruner:
             and null deltas share the same location and scale.
         """
         p_null = self._DELTA_NULL_PERMUTATIONS
-        max_deltas = np.empty(p_null, dtype=np.float64)
 
-        strata_indices = None
         sr = self.permutation_test._stratified_result
         use_stratified_anchors = (
             self.strategy == "similarity_stratified"
@@ -289,28 +288,14 @@ class AlignmentPruner:
             wass_null_z_mean = self._null_z_mean
             wass_null_z_scale = self._null_z_scale
 
-        for i in range(p_null):
-            # Fresh seeds, offset past the existing permutation seeds
+        def compute_one(i):
             iter_seed = 12345 + self.permutations + i
             rng = np.random.default_rng(iter_seed)
-
-            if strata_indices is None:
-                permuted_array = np.apply_along_axis(
-                    rng.permutation, 0, alignment_array
-                )
-            else:
-                permuted_array = alignment_array.copy()
-                for s_indices in strata_indices:
-                    sub = permuted_array[s_indices, :]
-                    permuted_array[s_indices, :] = np.apply_along_axis(
-                        rng.permutation, 0, sub
-                    )
-
+            permuted_array = np.apply_along_axis(rng.permutation, 0, alignment_array)
             count_rows = self.chi_square_calculator.calculate_row_counts(permuted_array)
             expected = self.chi_square_calculator.calculate_expected_observed(
                 count_rows
             )
-
             if self.pruning_algorithm == "squared":
                 initial = self.chi_square_calculator.calculate_global_chi2(
                     expected, count_rows
@@ -345,13 +330,18 @@ class AlignmentPruner:
                 )
             else:
                 raise ValueError(f"Unknown pruning algorithm: {self.pruning_algorithm}")
+            return max(deltas.values())
 
-            max_deltas[i] = max(deltas.values())
-            print(
-                f"  Null delta permutation {i + 1}/{p_null}: "
-                f"max_delta={max_deltas[i]:.6f}"
+        # Avoid nested joblib: outer loop owns all worker capacity here.
+        saved_chisq_workers = self.chi_square_calculator.num_workers
+        self.chi_square_calculator.num_workers = 1
+        try:
+            max_deltas_list = Parallel(n_jobs=self.num_workers_permute)(
+                delayed(compute_one)(i) for i in range(p_null)
             )
-
+        finally:
+            self.chi_square_calculator.num_workers = saved_chisq_workers
+        max_deltas = np.asarray(max_deltas_list, dtype=np.float64)
         self._null_max_deltas = max_deltas
         print(
             f"Null max-delta distribution (n={p_null}): "
