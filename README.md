@@ -10,13 +10,13 @@ WitChi is an analysis and pruning tool designed to evaluate and reduce compositi
 * **Multiple Pruning Algorithms**: Supports squared, Wasserstein, and quartic delta Chi-square pruning.
 * **Permutation-Based Thresholding**: Empirically estimates unbiased Chi-square score distributions using permutation tests.
 * **Per-Column Justified Stopping**: Delta-null stopping criterion halts pruning when no individual column's bias contribution exceeds the noise ceiling — protecting phylogenetic signal from indiscriminate trimming once bias becomes diffuse.
-* **Parallel Processing**: Leverages multi-threading for computational efficiency.
+* **Parallel Processing**: Multi-process parallelism via joblib for computational efficiency.
 * **Modular Design**: Perform only pruning or permutation testing depending on your analysis goals.
 * **Flexible Configuration**: Adjustable parameters such as pruning depth, top N columns to prune, and permutation count.
 
 ![Fig1_v1](https://github.com/user-attachments/assets/aa3a2589-11ce-42e7-b988-e7ed4a5dda1e)
 
-Overview of the WitChi workflows for detecting and reducing compositional bias in multiple sequence alignments. (A) The TEST workflow (gray background) computes taxon-specific χ² scores and establishes an empirical null distribution by column permutation (100x default, configurable), allowing the identification of biased taxa. The PRUNE workflow (green background) iteratively removes alignment columns with the highest Δχ², followed by a convergence check to determine whether pruning should continue or stop. (B) Example observed MSA and one corresponding column- permuted MSA, illustrating how taxon-specific biases are homogenised while preserving global composition. The bar plot on the right compares taxon χ² scores between the observedl and permuted alignments. (C) Left: Δχ² scores per alignment column, with the most biased column flagged for removal (dashed box). Right: Density distributions of taxon-specific χ² scores before and during the pruning loop, showing how pruning shifts scores toward the null distribution. Once no further biased taxa are detected, pruning converges to an unbiased alignment (right panel).
+Overview of the WitChi workflows for detecting and reducing compositional bias in multiple sequence alignments. (A) The TEST workflow (gray background) computes taxon-specific χ² scores and establishes an empirical null distribution by column permutation (100x default, configurable), allowing the identification of biased taxa. The PRUNE workflow (green background) iteratively removes alignment columns with the highest Δχ², followed by a convergence check to determine whether pruning should continue or stop. (B) Example observed MSA and one corresponding column- permuted MSA, illustrating how taxon-specific biases are homogenised while preserving global composition. The bar plot on the right compares taxon χ² scores between the observed and permuted alignments. (C) Left: Δχ² scores per alignment column, with the most biased column flagged for removal (dashed box). Right: Density distributions of taxon-specific χ² scores before and during the pruning loop, showing how pruning shifts scores toward the null distribution. Once no further biased taxa are detected, pruning converges to an unbiased alignment (right panel).
 
 ## Installation
 **1. Clone the repository:**
@@ -59,7 +59,7 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--max_residue_pruned`: Maximum columns to prune (default: 100).
 - `--permutations`: Number of permutations for empirical distribution (default: 100).
 - `--num_workers_chisq`: Number of CPU threads for chi-square calculations (default: 1).
-- `--num_workers_permute`: Number of CPU threads for permutation parallelization (default: 1).
+- `--num_workers_permute`: Number of CPU threads for permutation parallelization. Controls both the main permutation test and the delta-null permutation loop (default: 1).
 - `--top_n`: Number of top biased columns to prune per iteration (default: 1).
 - `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic).
 - `--strategy`: Permutation strategy (standard, similarity_stratified; default: standard).
@@ -83,7 +83,7 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 ## Pruning Algorithms
 - **Squared Pruning**: Prioritizes columns with the highest delta Chi-square score.
 - **Wasserstein Pruning**: Guides pruning by minimizing Wasserstein-1 distance between observed and null Z-score quantiles.
-- **Quartic Pruning**: Targets columns that maximize squared taxon delta Chi-square score differences.
+- **Quartic Pruning**: Uses Δχ⁴ (fourth-power per-taxon delta), amplifying extreme contributions.
 
 ## Output
 - Pruned Alignment File: A new alignment file with reduced bias.
@@ -102,6 +102,7 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 
   * Iteratively removes the most biased columns based on the selected algorithm.
   * At each iteration, two stopping layers are checked: (a) alignment-level convergence via empirical p-values, and (b) the delta-null criterion — the best-ranked column's delta must exceed the noise ceiling (the maximum delta expected by chance in an unbiased alignment). Pruning stops as soon as either layer signals completion.
+  * **Reactive touchdown rollback**: when the alignment-level layer would fire (alignment p > 0.05 or no significantly biased taxa remain), the most recent batch is rolled back, `top_n` is reduced to `max(1, initial_top_n // 10)`, and the loop resumes. Fires at most once per run, bounding the alignment-level overshoot to ~10% of the original batch size.
 
 **4. Final Output:**
 
@@ -145,7 +146,7 @@ Traditional stopping asks "is the alignment still biased?" via the alignment-lev
 
 WitChi adds a per-column justification test that complements the alignment-level criterion:
 
-1. **Null distribution of column deltas**. During the permutation test phase, 20 additional permuted alignments (fresh seeds, independent of the main null) are scored with the active pruning algorithm. The maximum per-column delta from each permutation forms the "noise ceiling" distribution — the largest delta an unbiased alignment would be expected to produce.
+1. **Null distribution of column deltas**. During the permutation test phase, 100 additional permuted alignments (fresh seeds, independent of the main null) are scored with the active pruning algorithm. The maximum per-column delta from each permutation forms the "noise ceiling" distribution — the largest delta an unbiased alignment would be expected to produce.
 
 2. **Per-iteration check (adaptive walk)**. At each iteration, WitChi walks the top-`top_n` candidate columns in descending delta order. Each candidate is tested against the noise ceiling: columns whose delta exceeds it are removed, and the walk stops at the first candidate that fails. Pruning halts only when the rank-1 candidate itself fails — at that point, no column can be individually justified as a bias carrier.
 
