@@ -5,7 +5,11 @@ from Bio.Seq import Seq
 from Bio.Align import MultipleSeqAlignment
 from joblib import Parallel, delayed
 
-from .chi_square_calculator import ChiSquareCalculator
+from .chi_square_calculator import (
+    ChiSquareCalculator,
+    _count_rows_from_int,
+    _encode_alignment_int,
+)
 from .permutation_test import PermutationTest
 from .sequence_type_detector import SequenceTypeDetector
 from .alignment_reader import AlignmentReader
@@ -377,6 +381,16 @@ class AlignmentPruner:
         # after the first rollback so we don't rollback a second time.
         original_alignment_array = alignment_array
         in_touchdown = False
+
+        # Across-iteration caches for the inner chi^2 path: encoded
+        # alignment (int8 codepoints) and un-fudged char counts. Both are
+        # maintained incrementally as columns are removed so each
+        # iteration avoids re-encoding the alignment and re-counting
+        # characters. Rebuilt on touchdown rollback.
+        char_set = self.chi_square_calculator.char_set
+        n_chars = len(char_set)
+        self._alignment_int = _encode_alignment_int(alignment_array, char_set)
+        self._count_rows_raw = _count_rows_from_int(self._alignment_int, n_chars)
 
         while removed_columns_count < self.max_residue_pruned:
             stats = self._calculate_per_row_stats(alignment_array)

@@ -2,7 +2,10 @@
 import unittest
 import numpy as np
 
-from witchi.alignment_pruner.chi_square_calculator import ChiSquareCalculator
+from witchi.alignment_pruner.chi_square_calculator import (
+    ChiSquareCalculator,
+    _encode_alignment_int,
+)
 from witchi.alignment_pruner.sequence_type_detector import SequenceTypeDetector
 from witchi.alignment_pruner.alignment_reader import AlignmentReader
 
@@ -14,6 +17,7 @@ class TestChiSquareCalculator(unittest.TestCase):
         self.alignment, self.alignment_array = reader.run()
         _, self.char_set = SequenceTypeDetector.detect(self.alignment)
         self.calc = ChiSquareCalculator(self.char_set, num_workers=1)
+        self.alignment_int = _encode_alignment_int(self.alignment_array, self.char_set)
 
     def test_calculate_row_counts_shape(self):
         counts = self.calc.calculate_row_counts(self.alignment_array)
@@ -78,7 +82,7 @@ class TestChiSquareCalculator(unittest.TestCase):
         expected = self.calc.calculate_expected_observed(counts)
         global_chi2 = self.calc.calculate_global_chi2(expected, counts)
         diffs = self.calc.calculate_global_chi2_difference(
-            counts, self.alignment_array, global_chi2
+            counts, self.alignment_int, global_chi2
         )
         self.assertIsInstance(diffs, dict)
         self.assertEqual(len(diffs), self.alignment_array.shape[1])
@@ -88,7 +92,7 @@ class TestChiSquareCalculator(unittest.TestCase):
         expected = self.calc.calculate_expected_observed(counts)
         quartic = self.calc.calculate_quartic_row_global_chi2(expected, counts)
         diffs = self.calc.calculate_quartic_chi2_difference(
-            counts, self.alignment_array, quartic
+            counts, self.alignment_int, quartic
         )
         self.assertIsInstance(diffs, dict)
         self.assertEqual(len(diffs), self.alignment_array.shape[1])
@@ -101,7 +105,7 @@ class TestChiSquareCalculator(unittest.TestCase):
         null_quantiles = np.quantile(row_chi2, np.linspace(0, 1, K + 2)[1:-1])
         w = self.calc.calculate_row_chi2_wasserstein(expected, counts, null_quantiles)
         diffs = self.calc.calculate_wasserstein_difference(
-            counts, self.alignment_array, w, null_quantiles
+            counts, self.alignment_int, w, null_quantiles
         )
         self.assertIsInstance(diffs, dict)
         self.assertEqual(len(diffs), self.alignment_array.shape[1])
@@ -120,7 +124,7 @@ class TestChiSquareCalculator(unittest.TestCase):
         initial = self.calc.calculate_global_chi2(full_expected, full_counts)
 
         optimized = self.calc.calculate_global_chi2_difference(
-            full_counts, self.alignment_array, initial
+            full_counts, self.alignment_int, initial
         )
 
         for j in range(self.alignment_array.shape[1]):
