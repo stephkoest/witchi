@@ -89,33 +89,43 @@ def _per_row_chi2_block(
     return S / safe_ct - col_totals_j, zero_mask
 
 
-def _reduce_block(
+def _reduce_chunk(
     cr,
     alignment_int,
     U,
     total_chars_base,
     N_base,
     col_totals_base,
-    j_start,
-    j_end,
+    chunk_start,
+    chunk_end,
+    B,
     reducer,
 ):
-    """Compute one block's per-row chi^2 and apply `reducer` in-worker.
+    """Process one column chunk by iterating L2-sized blocks within it.
 
-    Returns ((b,) reduced, (b,) zero_mask). Applying the reducer here avoids
-    shipping (T, b) per-row blocks back to the parent over joblib pickling.
+    Decouples the joblib dispatch unit (chunk) from the L2 cache unit
+    (block): one chunk = one joblib task, but inside the chunk many
+    blocks run serially so per-block ufuncs stay cache-resident. Returns
+    ((chunk_size,) reduced, list of zero-col indices in absolute coords).
     """
-    per_row_block, zero_mask = _per_row_chi2_block(
-        cr,
-        alignment_int,
-        U,
-        total_chars_base,
-        N_base,
-        col_totals_base,
-        j_start,
-        j_end,
-    )
-    return reducer(per_row_block), zero_mask
+    out = np.empty(chunk_end - chunk_start, dtype=np.float64)
+    zero_indices = []
+    for j_start in range(chunk_start, chunk_end, B):
+        j_end = min(j_start + B, chunk_end)
+        per_row_block, zero_mask = _per_row_chi2_block(
+            cr,
+            alignment_int,
+            U,
+            total_chars_base,
+            N_base,
+            col_totals_base,
+            j_start,
+            j_end,
+        )
+        out[j_start - chunk_start : j_end - chunk_start] = reducer(per_row_block)
+        if zero_mask.any():
+            zero_indices.extend(int(j_start + k) for k in np.where(zero_mask)[0])
+    return out, zero_indices
 
 
 def _reduce_sum(per_row_block):
@@ -234,13 +244,15 @@ class ChiSquareCalculator:
     def _reduce_chi2_per_col_removed(self, count_rows_array, alignment_int, reducer):
         """Stream per-row chi^2 blocks through `reducer`; return (L,) per-col.
 
-        Each (T, b) block is produced by _per_row_chi2_block, fed to
-        `reducer((T, b)) -> (b,)`, and discarded — never materialising the
-        full (T, L) per-row array. When num_workers > 1 and there is more
-        than one block, blocks are dispatched via joblib (reducer applied
-        inside the worker so only (b,) crosses back). Degenerate columns
-        fall back to a direct per-col path that uses the int8 column
-        slice; the same reducer is applied to the resulting (T, 1).
+        Two-level work splitting:
+          * inner block (B, sized for L2 cache) — locality unit, never
+            materialises (T, L); each block is reduced to (b,) and dropped.
+          * outer chunk (sized for joblib amortisation) — when
+            num_workers > 1, the column range is split into n_chunks each
+            covering many blocks; one chunk = one joblib task, so the
+            per-task overhead amortises across multiple blocks of work.
+        Degenerate columns fall back to a direct per-col path on the
+        int8 column slice with the same reducer.
         """
         cr = count_rows_array.astype(np.float64, copy=False)
         C, T = cr.shape
@@ -252,45 +264,57 @@ class ChiSquareCalculator:
         U = cr * cr
 
         B = max(16, min(256, 2_000_000 // (8 * T)))
-        block_ranges = [(j, min(j + B, L)) for j in range(0, L, B)]
+        # Decide whether to dispatch chunks via joblib. Two guards:
+        #   * each chunk must hold at least ~4 blocks (cache fit + overhead).
+        #   * total kernel work T*L must exceed ~5e6 to amortise the
+        #     ~50-100 ms per-task loky cost. On small alignments
+        #     (e.g. T*L ~ a few million) the parallel branch is skipped
+        #     entirely and we run a single serial chunk.
+        if T * L < 5_000_000 or self.num_workers <= 1:
+            n_chunks = 1
+        else:
+            n_chunks = min(self.num_workers, max(1, L // B // 4))
 
-        if self.num_workers > 1 and len(block_ranges) > 1:
-            results = Parallel(n_jobs=self.num_workers)(
-                delayed(_reduce_block)(
+        if n_chunks > 1:
+            bounds = np.linspace(0, L, n_chunks + 1, dtype=int)
+            chunk_ranges = list(zip(bounds[:-1], bounds[1:]))
+            results = Parallel(n_jobs=n_chunks)(
+                delayed(_reduce_chunk)(
                     cr,
                     alignment_int,
                     U,
                     total_chars_base,
                     N_base,
                     col_totals_base,
-                    js,
-                    je,
+                    cs,
+                    ce,
+                    B,
                     reducer,
                 )
-                for js, je in block_ranges
+                for cs, ce in chunk_ranges
             )
         else:
+            chunk_ranges = [(0, L)]
             results = [
-                _reduce_block(
+                _reduce_chunk(
                     cr,
                     alignment_int,
                     U,
                     total_chars_base,
                     N_base,
                     col_totals_base,
-                    js,
-                    je,
+                    0,
+                    L,
+                    B,
                     reducer,
                 )
-                for js, je in block_ranges
             ]
 
         out = np.empty(L, dtype=np.float64)
         zero_cols = []
-        for (js, je), (reduced, zero_mask) in zip(block_ranges, results):
-            out[js:je] = reduced
-            if zero_mask.any():
-                zero_cols.extend(int(js + k) for k in np.where(zero_mask)[0])
+        for (cs, ce), (chunk_out, zero_in_chunk) in zip(chunk_ranges, results):
+            out[cs:ce] = chunk_out
+            zero_cols.extend(zero_in_chunk)
 
         for j in zero_cols:
             single_col = _count_rows_from_int(alignment_int[:, j : j + 1], C)

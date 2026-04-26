@@ -202,7 +202,7 @@ class AlignmentPruner:
             expected_observed, count_rows_array
         )
         chi2_differences = self.chi_square_calculator.calculate_global_chi2_difference(
-            count_rows_array, alignment_array, initial_global_chi2
+            count_rows_array, self._alignment_int, initial_global_chi2
         )
         return initial_global_chi2, chi2_differences
 
@@ -213,7 +213,7 @@ class AlignmentPruner:
             )
         )
         chi2_differences = self.chi_square_calculator.calculate_quartic_chi2_difference(
-            count_rows_array, alignment_array, initial_global_chi2
+            count_rows_array, self._alignment_int, initial_global_chi2
         )
         return initial_global_chi2, chi2_differences
 
@@ -234,7 +234,7 @@ class AlignmentPruner:
         chi2_differences = (
             self.chi_square_calculator.calculate_wasserstein_zscore_difference(
                 count_rows_array,
-                alignment_array,
+                self._alignment_int,
                 wasserstein,
                 self._null_z_quantiles,
                 self._null_z_mean,
@@ -292,6 +292,8 @@ class AlignmentPruner:
             wass_null_z_mean = self._null_z_mean
             wass_null_z_scale = self._null_z_scale
 
+        char_set = self.chi_square_calculator.char_set
+
         def compute_one(i):
             iter_seed = 12345 + self.permutations + i
             rng = np.random.default_rng(iter_seed)
@@ -300,19 +302,20 @@ class AlignmentPruner:
             expected = self.chi_square_calculator.calculate_expected_observed(
                 count_rows
             )
+            permuted_int = _encode_alignment_int(permuted_array, char_set)
             if self.pruning_algorithm == "squared":
                 initial = self.chi_square_calculator.calculate_global_chi2(
                     expected, count_rows
                 )
                 deltas = self.chi_square_calculator.calculate_global_chi2_difference(
-                    count_rows, permuted_array, initial
+                    count_rows, permuted_int, initial
                 )
             elif self.pruning_algorithm == "quartic":
                 initial = self.chi_square_calculator.calculate_quartic_row_global_chi2(
                     expected, count_rows
                 )
                 deltas = self.chi_square_calculator.calculate_quartic_chi2_difference(
-                    count_rows, permuted_array, initial
+                    count_rows, permuted_int, initial
                 )
             elif self.pruning_algorithm == "wasserstein":
                 initial = self.chi_square_calculator.calculate_row_zscore_wasserstein(
@@ -325,7 +328,7 @@ class AlignmentPruner:
                 deltas = (
                     self.chi_square_calculator.calculate_wasserstein_zscore_difference(
                         count_rows,
-                        permuted_array,
+                        permuted_int,
                         initial,
                         self._null_z_quantiles,
                         wass_null_z_mean,
@@ -476,6 +479,13 @@ class AlignmentPruner:
                     for i in range(original_alignment_array.shape[1])
                     if i not in set(cols_to_remove)
                 ]
+                # Rebuild the cached encoded alignment + raw counts to
+                # match the rolled-back string alignment. Touchdown fires
+                # at most once per run, so the from-scratch cost is fine.
+                self._alignment_int = _encode_alignment_int(alignment_array, char_set)
+                self._count_rows_raw = _count_rows_from_int(
+                    self._alignment_int, n_chars
+                )
 
                 self.top_n = target_top_n
                 in_touchdown = True
@@ -543,7 +553,14 @@ class AlignmentPruner:
                 justified = [col for col, _ in sorted_candidates]
 
             top_n_indices = np.array(justified)
+            # Decrement cached raw counts by the removed columns'
+            # contributions, then drop the columns from both the string
+            # and int8 forms in lockstep.
+            self._count_rows_raw -= _count_rows_from_int(
+                self._alignment_int[:, top_n_indices], n_chars
+            )
             alignment_array = np.delete(alignment_array, top_n_indices, axis=1)
+            self._alignment_int = np.delete(self._alignment_int, top_n_indices, axis=1)
             iteration += 1
 
         score_dict["after_real"] = per_row_chi2
@@ -584,9 +601,7 @@ class AlignmentPruner:
 
     def _calculate_per_row_stats(self, alignment_array):
         """Calculate row-wise chi² statistics and summary metrics."""
-        count_rows_array = self.chi_square_calculator.calculate_row_counts(
-            alignment_array
-        )
+        count_rows_array = self._cached_count_rows()
         expected_observed = self.chi_square_calculator.calculate_expected_observed(
             count_rows_array
         )
@@ -602,6 +617,17 @@ class AlignmentPruner:
             "mean": np.mean(per_row_chi2),
             "sum": np.sum(per_row_chi2),
         }
+
+    def _cached_count_rows(self):
+        """Apply the +1 zero-safety fudge fresh to the cached raw counts.
+
+        The fudge is a step function on the raw counts (fires whenever any
+        cell is zero), so it is re-evaluated each iteration rather than
+        incrementally maintained.
+        """
+        if (self._count_rows_raw == 0).any():
+            return self._count_rows_raw + 1
+        return self._count_rows_raw.copy()
 
     def update_sequences(self, alignment, pruned_alignment_array):
         """Update sequences with pruned alignments."""
