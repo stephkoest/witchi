@@ -449,11 +449,11 @@ class AlignmentPruner:
                 f"Alignment p-value: {alignment_empirical_p:.2f}"
             )
 
-            # Reactive touchdown rollback: if an alignment-level criterion
-            # would stop us and we haven't touched down yet, undo the last
-            # batch and continue with a 10x smaller top_n. This bounds the
-            # overshoot and gives the delta-null adaptive walk room to
-            # engage in the final small batches. Fires at most once.
+            # Reactive touchdown rollback: undo the most recent batch
+            # and continue with a 10x smaller top_n. Bounds the overshoot
+            # from either signal (alignment-level stop OR delta-null
+            # partial batch) and gives the adaptive walk room to engage
+            # in the final small batches. Fires at most once per run.
             target_top_n = max(1, self.initial_top_n // 10)
             if (
                 should_stop
@@ -461,33 +461,17 @@ class AlignmentPruner:
                 and self.top_n > target_top_n
                 and len(top_n_indices) > 0
             ):
-                n_recent = len(top_n_indices)
-                recent_cols = list(prune_dict.keys())[-n_recent:]
-                for col in recent_cols:
-                    del prune_dict[col]
-                removed_columns_count -= n_recent
-
-                cols_to_remove = sorted(prune_dict.keys())
-                if cols_to_remove:
-                    alignment_array = np.delete(
-                        original_alignment_array, cols_to_remove, axis=1
+                alignment_array, original_indices, n_recent = (
+                    self._do_touchdown_rollback(
+                        top_n_indices,
+                        prune_dict,
+                        original_alignment_array,
+                        target_top_n,
+                        char_set,
+                        n_chars,
                     )
-                else:
-                    alignment_array = original_alignment_array
-                original_indices = [
-                    i
-                    for i in range(original_alignment_array.shape[1])
-                    if i not in set(cols_to_remove)
-                ]
-                # Rebuild the cached encoded alignment + raw counts to
-                # match the rolled-back string alignment. Touchdown fires
-                # at most once per run, so the from-scratch cost is fine.
-                self._alignment_int = _encode_alignment_int(alignment_array, char_set)
-                self._count_rows_raw = _count_rows_from_int(
-                    self._alignment_int, n_chars
                 )
-
-                self.top_n = target_top_n
+                removed_columns_count -= n_recent
                 in_touchdown = True
                 top_n_indices = []
 
@@ -543,6 +527,37 @@ class AlignmentPruner:
 
                 if len(justified) < len(sorted_candidates):
                     fail_delta = sorted_candidates[len(justified)][1]
+                    # Harmonised touchdown: a partial batch means the
+                    # current top_n was too aggressive. If the touchdown
+                    # budget is unspent and a previous batch exists, roll
+                    # it back and resume with reduced top_n (same
+                    # mechanism as the alignment-level overshoot path).
+                    if (
+                        not in_touchdown
+                        and self.top_n > target_top_n
+                        and len(top_n_indices) > 0
+                    ):
+                        alignment_array, original_indices, n_recent = (
+                            self._do_touchdown_rollback(
+                                top_n_indices,
+                                prune_dict,
+                                original_alignment_array,
+                                target_top_n,
+                                char_set,
+                                n_chars,
+                            )
+                        )
+                        removed_columns_count -= n_recent
+                        in_touchdown = True
+                        top_n_indices = []
+                        print(
+                            f"Touchdown: delta-null partial batch "
+                            f"(rank {len(justified) + 1} fails at "
+                            f"p={last_p:.3f}, delta={fail_delta:.6f}). "
+                            f"Rolled back {n_recent} columns, reduced "
+                            f"top_n to {target_top_n}, resuming pruning."
+                        )
+                        continue
                     print(
                         f"  Partial batch: removing {len(justified)}/"
                         f"{len(sorted_candidates)} columns "
@@ -598,6 +613,47 @@ class AlignmentPruner:
         )
         significant_count = sum(p <= 0.05 for p in empirical_pvals)
         return alignment_empirical_p, significant_count
+
+    def _do_touchdown_rollback(
+        self,
+        top_n_indices,
+        prune_dict,
+        original_alignment_array,
+        target_top_n,
+        char_set,
+        n_chars,
+    ):
+        """Roll back the most recent applied batch and reduce top_n.
+
+        Mutates `prune_dict` (deletes the last batch's entries) and
+        `self.top_n`, `self._alignment_int`, `self._count_rows_raw`.
+        Returns (alignment_array, original_indices, n_recent) for the
+        caller to install.
+        """
+        n_recent = len(top_n_indices)
+        recent_cols = list(prune_dict.keys())[-n_recent:]
+        for col in recent_cols:
+            del prune_dict[col]
+
+        cols_to_remove = sorted(prune_dict.keys())
+        if cols_to_remove:
+            alignment_array = np.delete(
+                original_alignment_array, cols_to_remove, axis=1
+            )
+        else:
+            alignment_array = original_alignment_array
+        original_indices = [
+            i
+            for i in range(original_alignment_array.shape[1])
+            if i not in set(cols_to_remove)
+        ]
+        # Rebuild the cached encoded alignment + raw counts to match
+        # the rolled-back string alignment. Touchdown fires at most
+        # once per run, so the from-scratch cost is fine.
+        self._alignment_int = _encode_alignment_int(alignment_array, char_set)
+        self._count_rows_raw = _count_rows_from_int(self._alignment_int, n_chars)
+        self.top_n = target_top_n
+        return alignment_array, original_indices, n_recent
 
     def _calculate_per_row_stats(self, alignment_array):
         """Calculate row-wise chi² statistics and summary metrics."""
