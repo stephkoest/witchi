@@ -26,5 +26,5 @@ setup(
             "witchi=witchi.witchi:main",
         ],
     },
-    install_requires=["numpy", "biopython", "joblib"],
+    install_requires=["numpy", "biopython", "joblib", "threadpoolctl"],
 )

@@ -1,5 +1,6 @@
 import numpy as np
 from joblib import Parallel, delayed
+from threadpoolctl import threadpool_limits
 
 
 def _encode_alignment_int(alignment_array, char_set):
@@ -107,25 +108,35 @@ def _reduce_chunk(
     (block): one chunk = one joblib task, but inside the chunk many
     blocks run serially so per-block ufuncs stay cache-resident. Returns
     ((chunk_size,) reduced, list of zero-col indices in absolute coords).
+
+    BLAS is clamped to a single thread for the duration of the kernel:
+    the only BLAS site is the small ``U.T @ inv_gf`` matmul inside
+    ``_per_row_chi2_block``, which is below OpenBLAS's threading
+    threshold and gains nothing from a per-process thread pool. The
+    clamp is scoped via ``threadpool_limits`` so it applies inside loky
+    workers (when n_chunks>1) without touching any process env vars —
+    leaving HPC scheduler-supplied OMP_NUM_THREADS and downstream
+    library threading untouched.
     """
-    out = np.empty(chunk_end - chunk_start, dtype=np.float64)
-    zero_indices = []
-    for j_start in range(chunk_start, chunk_end, B):
-        j_end = min(j_start + B, chunk_end)
-        per_row_block, zero_mask = _per_row_chi2_block(
-            cr,
-            alignment_int,
-            U,
-            total_chars_base,
-            N_base,
-            col_totals_base,
-            j_start,
-            j_end,
-        )
-        out[j_start - chunk_start : j_end - chunk_start] = reducer(per_row_block)
-        if zero_mask.any():
-            zero_indices.extend(int(j_start + k) for k in np.where(zero_mask)[0])
-    return out, zero_indices
+    with threadpool_limits(limits=1, user_api="blas"):
+        out = np.empty(chunk_end - chunk_start, dtype=np.float64)
+        zero_indices = []
+        for j_start in range(chunk_start, chunk_end, B):
+            j_end = min(j_start + B, chunk_end)
+            per_row_block, zero_mask = _per_row_chi2_block(
+                cr,
+                alignment_int,
+                U,
+                total_chars_base,
+                N_base,
+                col_totals_base,
+                j_start,
+                j_end,
+            )
+            out[j_start - chunk_start : j_end - chunk_start] = reducer(per_row_block)
+            if zero_mask.any():
+                zero_indices.extend(int(j_start + k) for k in np.where(zero_mask)[0])
+        return out, zero_indices
 
 
 def _reduce_sum(per_row_block):
