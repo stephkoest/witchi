@@ -57,24 +57,11 @@ def write_score_dict_to_tsv(dictionary, file_name):
         )
     )
 
-    has_stratum = any("stratum" in v for v in sorted_dict.values())
     with open(file_name, "w", newline="") as tsvfile:
         writer = csv.writer(tsvfile, delimiter="\t")
-        if has_stratum:
-            writer.writerow(["Row", "Stratum", "Empirical-Pvalue", "Z-Score"])
-            for row, values in sorted_dict.items():
-                writer.writerow(
-                    [
-                        row,
-                        values["stratum"],
-                        values["empirical_pvalue"],
-                        values["zscore"],
-                    ]
-                )
-        else:
-            writer.writerow(["Row", "Empirical-Pvalue", "Z-Score"])
-            for row, values in sorted_dict.items():
-                writer.writerow([row, values["empirical_pvalue"], values["zscore"]])
+        writer.writerow(["Row", "Empirical-Pvalue", "Z-Score"])
+        for row, values in sorted_dict.items():
+            writer.writerow([row, values["empirical_pvalue"], values["zscore"]])
 
 
 def _robust_zscore(observed, null_pool):
@@ -98,13 +85,8 @@ def make_score_dict(
     permutated_per_row_chi2,
     empirical_pvalues,
     alignment,
-    name_to_stratum=None,
 ):
-    """Make a dictionary of chi-squared scores for each row in the alignment.
-
-    Z-scores are always computed against the pooled null so that all taxa
-    are on a common, dataset-wide scale regardless of stratum assignment.
-    """
+    """Make a dictionary of chi-squared scores for each row in the alignment."""
     per_row_chi2 = np.array(per_row_chi2)
     row_names = [record.id for record in alignment]
 
@@ -117,13 +99,10 @@ def make_score_dict(
 
     row_empirical_pvalue_dict = {}
     for i in range(len(row_names)):
-        entry = {
+        row_empirical_pvalue_dict[row_names[i]] = {
             "empirical_pvalue": empirical_pvalues[i],
             "zscore": zscores[i],
         }
-        if name_to_stratum is not None:
-            entry["stratum"] = name_to_stratum.get(row_names[i], 0)
-        row_empirical_pvalue_dict[row_names[i]] = entry
     # sort row_empirical_pvalue_dict by z-score in descending order
     row_empirical_pvalue_dict = dict(
         sorted(

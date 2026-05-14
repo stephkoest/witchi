@@ -71,7 +71,6 @@ class TestMakeScoreDict(unittest.TestCase):
         for v in result.values():
             self.assertIn("empirical_pvalue", v)
             self.assertIn("zscore", v)
-            self.assertNotIn("stratum", v)
 
     def test_sorted_by_zscore_descending(self):
         names = ["low", "mid", "high"]
@@ -100,25 +99,6 @@ class TestMakeScoreDict(unittest.TestCase):
         self.assertEqual(len(result), 2)
         for v in result.values():
             self.assertIn("zscore", v)
-
-    def test_with_stratum_info(self):
-        names = ["x", "y"]
-        alignment = self._make_alignment(names)
-        per_row_chi2 = np.array([3.0, 7.0])
-        null_pool = np.ones(100) * 5.0
-        pvalues = [0.5, 0.5]
-        name_to_stratum = {"x": 0, "y": 1}
-
-        result = make_score_dict(
-            per_row_chi2,
-            null_pool,
-            pvalues,
-            alignment,
-            name_to_stratum=name_to_stratum,
-        )
-        for name, v in result.items():
-            self.assertIn("stratum", v)
-            self.assertEqual(v["stratum"], name_to_stratum[name])
 
 
 class TestWriteAlignment(unittest.TestCase):
@@ -183,7 +163,7 @@ class TestWriteScoreDictToJson(unittest.TestCase):
 
 class TestWriteScoreDictToTsv(unittest.TestCase):
 
-    def test_without_stratum(self):
+    def test_writes_headers_and_rows(self):
         d = {
             "tax1": {"empirical_pvalue": 0.01, "zscore": 5.0},
             "tax2": {"empirical_pvalue": 0.5, "zscore": 1.0},
@@ -195,24 +175,8 @@ class TestWriteScoreDictToTsv(unittest.TestCase):
             with open(path) as fh:
                 lines = fh.readlines()
             self.assertIn("Row", lines[0])
-            self.assertNotIn("Stratum", lines[0])
             # sorted by descending abs zscore: tax1 (5.0) first
             self.assertTrue(lines[1].startswith("tax1"))
-        finally:
-            os.unlink(path)
-
-    def test_with_stratum(self):
-        d = {
-            "tax1": {"empirical_pvalue": 0.01, "zscore": 3.0, "stratum": 0},
-            "tax2": {"empirical_pvalue": 0.5, "zscore": 1.0, "stratum": 1},
-        }
-        with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False) as f:
-            path = f.name
-        try:
-            write_score_dict_to_tsv(d, path)
-            with open(path) as fh:
-                lines = fh.readlines()
-            self.assertIn("Stratum", lines[0])
         finally:
             os.unlink(path)
 

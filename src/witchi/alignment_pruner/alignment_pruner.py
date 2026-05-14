@@ -35,7 +35,6 @@ class AlignmentPruner:
         num_workers_permute=1,
         top_n=10,
         pruning_algorithm="squared",
-        strategy="standard",
         strict=False,
         delta_null=True,
     ):
@@ -48,7 +47,6 @@ class AlignmentPruner:
         self.strict = strict
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
-        self.strategy = strategy
         self.delta_null = delta_null
         self.chi_square_calculator = None
         self.alignment_size = None
@@ -67,7 +65,6 @@ class AlignmentPruner:
         print(f"Chi² calculator using {self.num_workers_chisq} worker(s)")
         print(f"Permutation test using {self.num_workers_permute} worker(s)")
         print(f"Pruning algorithm: {self.pruning_algorithm}")
-        print(f"Permutation strategy: {self.strategy}")
         print(f"Initial top_n: {self.top_n}")
         reader = AlignmentReader(self.file, self.format)
         alignment, alignment_array = reader.run()
@@ -89,8 +86,6 @@ class AlignmentPruner:
         ) = self.permutation_test.compute_null(
             alignment_array,
             self.chi_square_calculator,
-            strategy=self.strategy,
-            alignment=alignment,
         )
 
         # Precompute Z-score parameters from pooled null (consistent with _robust_zscore)
@@ -100,16 +95,7 @@ class AlignmentPruner:
         self._null_z_scale = _mad / 0.6745
 
         # Compress null Z-scores to quantiles for Wasserstein pruning.
-        # For stratified strategy, target the stratified null (tree-aware shape);
-        # for standard, target the standard null.
-        if (
-            self.strategy == "similarity_stratified"
-            and self.permutation_test._stratified_result is not None
-        ):
-            target_null = self.permutation_test._stratified_result.pooled_null
-        else:
-            target_null = permutated_per_row_chi2
-        null_z = (target_null - self._null_z_mean) / self._null_z_scale
+        null_z = (permutated_per_row_chi2 - self._null_z_mean) / self._null_z_scale
         K = min(200, len(null_z))
         positions = np.linspace(0, 1, K + 2)[1:-1]
         self._null_z_quantiles = np.quantile(null_z, positions)
@@ -129,11 +115,7 @@ class AlignmentPruner:
         pruned_sequences = self.update_sequences(alignment, pruned_alignment_array)
         pruned_alignment = MultipleSeqAlignment(pruned_sequences)
         # build output filename suffix
-        parts = [f"_{self.pruning_algorithm}_s{self.top_n}"]
-        if self.strategy != "standard":
-            parts.append(f"_{self.strategy}")
-        parts.append("_pruned.fasta")
-        suffix = "".join(parts)
+        suffix = f"_{self.pruning_algorithm}_s{self.top_n}_pruned.fasta"
         output_alignment_pruned_file = os.path.splitext(self.file)[0] + suffix
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", ".tsv"
@@ -147,19 +129,12 @@ class AlignmentPruner:
         empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
             score_dict["after_real"],
             permutated_per_row_chi2,
-            per_taxon_pools=self.permutation_test._stratum_pools,
         )
-        name_to_stratum = None
-        if self.permutation_test._stratified_result is not None:
-            name_to_stratum = self.permutation_test._stratified_result.diagnostics.get(
-                "name_to_stratum"
-            )
         row_empirical_pvalue_dict = make_score_dict(
             score_dict["after_real"],
             permutated_per_row_chi2,
             empirical_pvalues,
             alignment,
-            name_to_stratum=name_to_stratum,
         )
         output_score_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_scores.tsv"
@@ -250,48 +225,8 @@ class AlignmentPruner:
         using the active pruning algorithm, then record the maximum delta.
         The resulting distribution tests whether observed deltas during
         pruning are distinguishable from chance.
-
-        All algorithms use standard column permutation for the delta-null
-        regardless of strategy. Within-stratum permutation was tested for
-        Wasserstein in similarity_stratified mode but produced an unstable
-        noise ceiling at small stratum sizes (the combinatorial space of
-        a size-s stratum is only s!); broader sampling from the full taxon
-        set gives a stable max-delta distribution.
-
-        Z-anchors for Wasserstein still track strategy:
-          - Standard mode: pipeline-wide standard anchors
-            (self._null_z_mean, self._null_z_scale).
-          - Stratified mode: mean and MAD/0.6745 of the stratified
-            permutation test's ``_stratified_result.pooled_null`` — so
-            observed deltas (computed on the stratified reference frame)
-            and null deltas share the same location and scale.
         """
         p_null = self._DELTA_NULL_PERMUTATIONS
-
-        sr = self.permutation_test._stratified_result
-        use_stratified_anchors = (
-            self.strategy == "similarity_stratified"
-            and self.pruning_algorithm == "wasserstein"
-            and sr is not None
-        )
-
-        # Wasserstein anchor selection:
-        #   - Stratified mode: use the main stratified permutation
-        #     test's pool stats (computed earlier in compute_null and
-        #     stored on sr.pooled_null). This centres the delta-null on
-        #     the stratified reference frame so preserved within-stratum
-        #     bias does not push the null deltas into the biased regime.
-        #   - Standard mode: keep the pipeline-wide standard anchors.
-        if use_stratified_anchors:
-            strat_pool = sr.pooled_null
-            wass_null_z_mean = float(np.mean(strat_pool))
-            _strat_median = float(np.median(strat_pool))
-            _strat_mad = float(np.median(np.abs(strat_pool - _strat_median)))
-            wass_null_z_scale = _strat_mad / 0.6745 if _strat_mad > 0 else 1.0
-        else:
-            wass_null_z_mean = self._null_z_mean
-            wass_null_z_scale = self._null_z_scale
-
         char_set = self.chi_square_calculator.char_set
 
         def compute_one(i):
@@ -322,8 +257,8 @@ class AlignmentPruner:
                     expected,
                     count_rows,
                     self._null_z_quantiles,
-                    wass_null_z_mean,
-                    wass_null_z_scale,
+                    self._null_z_mean,
+                    self._null_z_scale,
                 )
                 deltas = (
                     self.chi_square_calculator.calculate_wasserstein_zscore_difference(
@@ -331,8 +266,8 @@ class AlignmentPruner:
                         permuted_int,
                         initial,
                         self._null_z_quantiles,
-                        wass_null_z_mean,
-                        wass_null_z_scale,
+                        self._null_z_mean,
+                        self._null_z_scale,
                     )
                 )
             else:
@@ -409,14 +344,6 @@ class AlignmentPruner:
             if iteration == 0:
                 score_dict["before_permuted"] = permutated_per_row_chi2
                 score_dict["before_real"] = per_row_chi2
-                sr = self.permutation_test._stratified_result
-                if sr is not None:
-                    score_dict["stratified_permuted"] = sr.pooled_null
-                    score_dict["stratification"] = {
-                        "taxon_names": [rec.id for rec in alignment],
-                        "bin_ids": sr.bin_ids.tolist(),
-                        "n_strata": int(sr.diagnostics["n_strata_realizable"]),
-                    }
             else:
                 # only write to prune_dict after the first pruning iteration
                 for col in top_n_indices:
@@ -609,7 +536,6 @@ class AlignmentPruner:
         empirical_pvals = self.permutation_test.calc_empirical_pvalue(
             stats["per_row_chi2"],
             permuted_chi2,
-            per_taxon_pools=self.permutation_test._stratum_pools,
         )
         significant_count = sum(p <= 0.05 for p in empirical_pvals)
         return alignment_empirical_p, significant_count
