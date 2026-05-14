@@ -23,8 +23,6 @@ from .utils import (
 
 
 class AlignmentPruner:
-    _DELTA_NULL_PERMUTATIONS = 100
-
     def __init__(
         self,
         file,
@@ -225,7 +223,7 @@ class AlignmentPruner:
         The resulting distribution tests whether observed deltas during
         pruning are distinguishable from chance.
         """
-        p_null = self._DELTA_NULL_PERMUTATIONS
+        p_null = self.permutations
         char_set = self.chi_square_calculator.char_set
 
         def compute_one(i):

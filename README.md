@@ -125,7 +125,7 @@ Traditional stopping asks "is the alignment still biased?" via the alignment-lev
 
 WitChi adds a per-column justification test that complements the alignment-level criterion:
 
-1. **Null distribution of column deltas**. During the permutation test phase, 100 additional permuted alignments (fresh seeds, independent of the main null) are scored with the active pruning algorithm. The maximum per-column delta from each permutation forms the "noise ceiling" distribution — the largest delta an unbiased alignment would be expected to produce.
+1. **Null distribution of column deltas**. During the permutation test phase, `--permutations` additional permuted alignments (fresh seeds, independent of the main null) are scored with the active pruning algorithm. The maximum per-column delta from each permutation forms the "noise ceiling" distribution — the largest delta an unbiased alignment would be expected to produce.
 
 2. **Per-iteration check (adaptive walk)**. At each iteration, WitChi walks the top-`top_n` candidate columns in descending delta order. Each candidate is tested against the noise ceiling: columns whose delta exceeds it are removed, and the walk stops at the first candidate that fails. Pruning halts only when the rank-1 candidate itself fails — at that point, no column can be individually justified as a bias carrier.
 
