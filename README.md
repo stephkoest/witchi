@@ -114,9 +114,9 @@ witchi test --file example.nex --format "nexus"
 You can run this on multiple subsets of the dataset, with different taxon sampling for example.
 Once you have chosen datasets you want to prune, go to the next step.
 
-2. Prune up to 50 residues of the alignment with Wasserstein distance guidance:
+2. Prune up to 50 residues of the alignment:
 ```bash
-witchi prune --file example.nex --max_residue_pruned 50 --pruning_algorithm wasserstein
+witchi prune --file example.nex --max_residue_pruned 50
 ```
 
 ## Delta-Null Stopping Criterion
