@@ -62,7 +62,6 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--num_workers_permute`: Number of CPU threads for permutation parallelization. Controls both the main permutation test and the delta-null permutation loop (default: 1).
 - `--top_n`: Number of top biased columns to prune per iteration (default: 1).
 - `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic).
-- `--strategy`: Permutation strategy (standard, similarity_stratified; default: standard).
 - `--strict`: Enforce pruning until all taxa are individually unbiased (ignores alignment-level p-value threshold).
 - `--delta-null` / `--no-delta-null`: Enable/disable the delta-null stopping criterion (default: enabled). When enabled, WitChi also tests whether the best-ranked column's delta exceeds a permutation-based noise ceiling, and stops pruning when it doesn't.
 
@@ -78,7 +77,6 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 - `--num_workers_permute`: Number of CPU threads (default: 1).
 - `--permutations`: Number of permutations (default: 100).
 - `--create_output`: Flag to create output file with z-scores and empirical p-values per taxon.
-- `--strategy`: Permutation strategy (standard, similarity_stratified; default: standard).
 
 ## Pruning Algorithms
 - **Squared Pruning**: Prioritizes columns with the highest delta Chi-square score.
@@ -121,25 +119,6 @@ Once you have chosen datasets you want to prune, go to the next step.
 witchi prune --file example.nex --max_residue_pruned 50 --pruning_algorithm wasserstein
 ```
 
-## Similarity-Stratified Permutation
-
-By default, WitChi permutes columns across all taxa equally (standard strategy). This treats all taxa as exchangeable, which can be inappropriate on uneven trees: long-branch taxa may be falsely flagged as compositionally biased, while short-branch taxa may be missed.
-
-The `--strategy similarity_stratified` option addresses this by:
-1. **Clustering taxa into strata** based on evolutionary isolation (k-NN distance in a seed-projection space, inspired by the mBed embedding of [Blackshields et al. 2010](https://doi.org/10.1186/1748-7188-5-21)).
-2. **Permuting columns within each stratum**, preserving the correlation structure imposed by shared ancestry.
-3. **Per-stratum expected frequencies**: computing chi-squared values using stratum-specific expected frequencies (not global), producing a tighter null that reflects within-stratum composition.
-
-### Testing with stratified permutation
-```bash
-witchi test --file alignment.fasta --format fasta --permutations 100 --num_workers_permute 2 --create_output --strategy similarity_stratified
-```
-
-### Pruning with stratified permutation
-```bash
-witchi prune --file alignment.fasta --format fasta --max_residue_pruned 50 --permutations 100 --pruning_algorithm wasserstein --strategy similarity_stratified
-```
-
 ## Delta-Null Stopping Criterion
 
 Traditional stopping asks "is the alignment still biased?" via the alignment-level empirical p-value. This is an omnibus test: a significant answer says bias exists, but doesn't say *which* columns carry it. Once the concentrated bias carriers have been pruned, residual bias is often spread diffusely across many columns, none of which individually stands out. Continuing to prune at that point removes whichever column happens to rank highest — trading phylogenetic signal for the appearance of cleaning up bias the pruner can no longer meaningfully locate.
@@ -152,7 +131,7 @@ WitChi adds a per-column justification test that complements the alignment-level
 
 3. **Graceful touchdown**. When the alignment is strongly biased, full batches of `top_n` columns are removed per iteration. As convergence approaches, batches naturally shrink (e.g. 20 → 13 → 0) until rank-1 fails. No manual threshold is needed — the test itself dictates when to slow down.
 
-Supported for all three pruning algorithms (squared, quartic, wasserstein) and both permutation strategies (standard, similarity_stratified). Enabled by default; disable with `--no-delta-null` if you want the classic alignment-level-only stopping behaviour.
+Supported for all three pruning algorithms (squared, quartic, wasserstein). Enabled by default; disable with `--no-delta-null` if you want the classic alignment-level-only stopping behaviour.
 
 ## License
 witchi is licensed under the MIT License.
