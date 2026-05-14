@@ -16,28 +16,24 @@ WitChi detects and prunes compositionally biased columns in multiple sequence al
 Overview of the WitChi workflows for detecting and reducing compositional bias in multiple sequence alignments. (A) The TEST workflow (gray background) computes taxon-specific χ² scores and establishes an empirical null distribution by column permutation (100x default, configurable), allowing the identification of biased taxa. The PRUNE workflow (green background) iteratively removes alignment columns with the highest Δχ², followed by a convergence check to determine whether pruning should continue or stop. (B) Example observed MSA and one corresponding column- permuted MSA, illustrating how taxon-specific biases are homogenised while preserving global composition. The bar plot on the right compares taxon χ² scores between the observed and permuted alignments. (C) Left: Δχ² scores per alignment column, with the most biased column flagged for removal (dashed box). Right: Density distributions of taxon-specific χ² scores before and during the pruning loop, showing how pruning shifts scores toward the null distribution. Once no further biased taxa are detected, pruning converges to an unbiased alignment (right panel).
 
 ## Installation
-**1. Clone the repository:**
+```bash
+conda env create -f environment.yml
+conda activate witchi
+```
+
+To add witchi to an existing conda env, include this in your `environment.yml`:
+```yaml
+- pip:
+    - git+https://github.com/stephkoest/witchi
+```
+
+For development (editable install + tests):
 ```bash
 git clone https://github.com/stephkoest/witchi.git
 cd witchi
-```
-
-**2. Create the Conda Environment:**
-
-```bash
 conda env create -f environment.yml
-conda activate witchi-env
-```
-**3. Install locally:**
-```bash
+conda activate witchi
 pip install -e .
-```
-
-**4. Running Tests:**
-
-As an example we use the compositionally biased 5 taxon dataset from Foster et al. 2022 (PMID: 36083446). The dataset is available in the `tests` directory.
-Run the tests using unittest:
-```bash
 pytest tests/
 ```
 
@@ -135,4 +131,3 @@ WitChi: Efficient Detection and Pruning of Compositional Bias in Phylogenomic Al
 Stephan Koestlbacher, Kassiani Panagiotou, Daniel Tamarit, Thijs Ettema
 bioRxiv 2025.07.14.663642; doi: https://doi.org/10.1101/2025.07.14.663642
 ```
-

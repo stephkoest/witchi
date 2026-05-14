@@ -1,16 +1,17 @@
-name: witchi-env
+name: witchi
 channels:
-  - defaults
   - conda-forge
+  - bioconda
+  - defaults
 dependencies:
-  - python=3.9
+  - python
   - numpy
-  - biopython
   - joblib
-  - threadpoolctl
   - seaborn
   - matplotlib
   - pytest
   - pip
+  - git
   - pip:
     - pre-commit
+    - git+https://github.com/stephkoest/witchi
