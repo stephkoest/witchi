@@ -64,27 +64,46 @@ def write_score_dict_to_tsv(dictionary, file_name):
             writer.writerow([row, values["empirical_pvalue"], values["zscore"]])
 
 
+def _robust_zscore(observed, null_pool):
+    """Compute a robust Z-score using mean centering and MAD scaling.
+
+    Centering on the mean (not median) ensures consistency between
+    conditional (per-alignment permutation) and marginal (simulation)
+    null distributions, because the mean has the tower property while
+    the median does not.
+    """
+    mean = np.mean(null_pool)
+    median = np.median(null_pool)
+    mad = np.median(np.abs(null_pool - median))
+    if mad == 0:
+        return 0.0 if observed == mean else np.sign(observed - mean) * np.inf
+    return (observed - mean) / (mad / 0.6745)
+
+
 def make_score_dict(
-    per_row_chi2, permutated_per_row_chi2, empirical_pvalues, alignment
+    per_row_chi2,
+    permutated_per_row_chi2,
+    empirical_pvalues,
+    alignment,
 ):
     """Make a dictionary of chi-squared scores for each row in the alignment."""
-    # Extract row names
     per_row_chi2 = np.array(per_row_chi2)
     row_names = [record.id for record in alignment]
-    mean_perm_chi2 = np.mean(permutated_per_row_chi2)
-    sd_perm_chi2 = np.std(permutated_per_row_chi2)
-    # Sort the dictionary by chi-squared scores in descending order
-    zscores = (per_row_chi2 - mean_perm_chi2) / sd_perm_chi2
 
-    # Calculate pvalues for each row
-    row_empirical_pvalue_dict = {
-        row_names[i]: {
+    zscores = np.array(
+        [
+            _robust_zscore(per_row_chi2[i], permutated_per_row_chi2)
+            for i in range(len(per_row_chi2))
+        ]
+    )
+
+    row_empirical_pvalue_dict = {}
+    for i in range(len(row_names)):
+        row_empirical_pvalue_dict[row_names[i]] = {
             "empirical_pvalue": empirical_pvalues[i],
             "zscore": zscores[i],
         }
-        for i in range(len(row_names))
-    }
-    # sort row_empirical_pvalue_dict by z-score in decending order
+    # sort row_empirical_pvalue_dict by z-score in descending order
     row_empirical_pvalue_dict = dict(
         sorted(
             row_empirical_pvalue_dict.items(),

@@ -12,17 +12,25 @@ class PermutationTest:
         self.permutations = permutations
 
     def calc_empirical_pvalue(self, per_row_chi2, permutated_per_row_chi2):
-        """Calculate empirical p-value."""
+        """Calculate empirical p-value.
+
+        Parameters
+        ----------
+        per_row_chi2 : np.ndarray or scalar
+            Observed per-taxon chi² (array) or alignment-level chi² (scalar).
+        permutated_per_row_chi2 : np.ndarray
+            Pooled null distribution.
+        """
         empirical_p_list = []
         # check if array, indicating per taxon chi2 scores
         if isinstance(per_row_chi2, np.ndarray):
-            for i in range(len(per_row_chi2)):
-                # divide number of permutated_per_row_chi2 larger than per_row_chi2[i]
-                # by the number of taxa in permutations to get the probability of the chi2 score
+            n_taxa = len(per_row_chi2)
+            for i in range(n_taxa):
                 empirical_p = (
                     np.sum(permutated_per_row_chi2 >= per_row_chi2[i])
                     / len(permutated_per_row_chi2)
-                ) * len(per_row_chi2)
+                ) * n_taxa
+                empirical_p = min(max(empirical_p, 0.0), 1.0)
                 empirical_p_list.append(empirical_p)
         # if not array, indicating total alignment chi2 scores
         else:
@@ -52,32 +60,40 @@ class PermutationTest:
         results = Parallel(n_jobs=self.num_workers)(
             delayed(permute_single_calculate_chi2)(i) for i in range(self.permutations)
         )
-        return np.array(results)
+        return np.array(results, dtype=np.float64)
+
+    @staticmethod
+    def _summarize_null(chi2_matrix):
+        """Compute summary statistics from a (P, N) chi² matrix.
+
+        Returns (sums, maxes, upper_box_threshold, upper_threshold, pooled_null).
+        """
+        sums = np.sum(chi2_matrix, axis=1)
+        maxes = np.max(chi2_matrix, axis=1)
+        pooled_null = chi2_matrix.ravel().astype(np.float64)
+        upper_box_threshold = float(np.percentile(pooled_null, 75))
+        upper_threshold = float(np.percentile(pooled_null, 95))
+        return sums, maxes, upper_box_threshold, upper_threshold, pooled_null
 
     def run(self, alignment_array, chi_square_calculator):
         """Run the permutation test and get chi-squared score percentiles and distribution."""
         print(f"Running {self.permutations} permutations.")
         print(f"Using {self.num_workers} worker(s) for permutation")
-        permutated_per_row_chi2 = self._permute_and_calculate_chi2(
+        chi2_matrix = self._permute_and_calculate_chi2(
             alignment_array, chi_square_calculator
         )
+        return self._summarize_null(chi2_matrix)
 
-        maxes = np.max(permutated_per_row_chi2, axis=1)
-        # gett sums for every permutation
-        sums = np.sum(permutated_per_row_chi2, axis=1)
-        # Flatten the list of chi-squared scores
-        permutated_per_row_chi2 = np.concatenate(permutated_per_row_chi2)
+    def compute_null(self, alignment_array, chi_square_calculator):
+        """Compute the permutation null distribution.
 
-        upper_box_threshold = np.percentile(permutated_per_row_chi2, 75)
-        upper_threshold = np.percentile(permutated_per_row_chi2, 95)
+        Bulk column permutation (all taxa exchangeable).
 
-        return (
-            sums,
-            maxes,
-            upper_box_threshold,
-            upper_threshold,
-            permutated_per_row_chi2,
-        )
+        Returns
+        -------
+        tuple : (sums, maxes, upper_box_threshold, upper_threshold, pooled_null)
+        """
+        return self.run(alignment_array, chi_square_calculator)
 
     def run_test(self, alignment_file, alignment_format, create_output=False):
         """Run the permutation test on an alignment."""
@@ -95,10 +111,10 @@ class PermutationTest:
 
         self.chi_square_calculator = ChiSquareCalculator(char_set, self.num_workers)
         sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
-            self.run(alignment_array, self.chi_square_calculator)
+            self.compute_null(alignment_array, self.chi_square_calculator)
         )
-        mean_perm_chi2 = np.mean(permutated_per_row_chi2)
-        sd_perm_chi2 = np.std(permutated_per_row_chi2)
+
+        from .utils import _robust_zscore
 
         row_counts = self.chi_square_calculator.calculate_row_counts(alignment_array)
         row_expected_observed = self.chi_square_calculator.calculate_expected_observed(
@@ -108,25 +124,28 @@ class PermutationTest:
             row_expected_observed, row_counts
         )
 
-        upper_chi_quantile = np.percentile(per_row_chi2, 95)
+        alignment_z = _robust_zscore(np.sum(per_row_chi2), sums)
 
         print(
             f"Alignment chi2score: {(np.sum(per_row_chi2)):.2f} | "
             f"Permutations alignment chi2scores: {(min(sums)):.2f} - {(max(sums)):.2f} | "
-            f"Empirical-P: {self.calc_empirical_pvalue(np.sum(per_row_chi2),sums)[0] }"
+            f"Empirical-P: {self.calc_empirical_pvalue(np.sum(per_row_chi2), sums)[0]}"
         )
         print(
             f"Alignment mean taxa chi2score: {(np.mean(per_row_chi2)):.2f} | "
-            f"Permutations mean taxa chi2score: {(mean_perm_chi2):.2f} | "
-            f"Mean Z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
-            f"q95 Z-score: {(upper_chi_quantile - upper_threshold) / sd_perm_chi2:.2f}"
+            f"Permutations mean taxa chi2score: {np.mean(permutated_per_row_chi2):.2f} | "
+            f"Alignment Z-score: {alignment_z:.2f}"
         )
         # calculate zscores and empirical p-values for each row
         empirical_pvalues = self.calc_empirical_pvalue(
-            per_row_chi2, permutated_per_row_chi2
+            per_row_chi2,
+            permutated_per_row_chi2,
         )
         row_empirical_pvalue_dict = make_score_dict(
-            per_row_chi2, permutated_per_row_chi2, empirical_pvalues, alignment
+            per_row_chi2,
+            permutated_per_row_chi2,
+            empirical_pvalues,
+            alignment,
         )
         # check for significant rows
         significant_list = [
@@ -163,4 +182,3 @@ class PermutationTest:
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"Execution time for testing: {elapsed_time:.2f} seconds")
-        # write_score_dict_to_json(sorted_row_chi2, "row_chi2_scores.json")
