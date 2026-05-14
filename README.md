@@ -9,7 +9,7 @@ WitChi is an analysis and pruning tool designed to evaluate and reduce compositi
 * **Iterative Chi-Square Pruning**: Iteratively removes biased columns based on Chi-square statistics.
 * **Multiple Pruning Algorithms**: Supports squared, Wasserstein, and quartic delta Chi-square pruning.
 * **Permutation-Based Thresholding**: Empirically estimates unbiased Chi-square score distributions using permutation tests.
-* **Per-Column Justified Stopping**: Delta-null stopping criterion halts pruning when no individual column's bias contribution exceeds the noise ceiling — protecting phylogenetic signal from indiscriminate trimming once bias becomes diffuse.
+* **Per-Column Justified Stopping**: Delta-null stopping criterion halts pruning when no individual column's Δχ² exceeds the magnitude expected under a homogeneous alignment — protecting phylogenetic signal from trimming columns whose χ² is driven by rate variation rather than compositional bias.
 * **Parallel Processing**: Multi-process parallelism via joblib for computational efficiency.
 * **Modular Design**: Perform only pruning or permutation testing depending on your analysis goals.
 * **Flexible Configuration**: Adjustable parameters such as pruning depth, top N columns to prune, and permutation count.
@@ -62,7 +62,7 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--num_workers_permute`: Number of CPU threads for permutation parallelization. Controls both the main permutation test and the delta-null permutation loop (default: 1).
 - `--top_n`: Number of top biased columns to prune per iteration (default: 1).
 - `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic; default: wasserstein).
-- `--delta-null` / `--no-delta-null`: Enable/disable the delta-null stopping criterion (default: enabled). When enabled, WitChi also tests whether the best-ranked column's delta exceeds a permutation-based noise ceiling, and stops pruning when it doesn't.
+- `--delta-null` / `--no-delta-null`: Enable/disable the delta-null stopping criterion (default: enabled). When enabled, WitChi also tests whether the best-ranked column's delta exceeds the Δχ² magnitude expected under a homogeneous alignment, and stops pruning when it doesn't.
 
 ### Permutation Testing
 Run permutation tests to establish empirical Chi-square distributions:
@@ -98,7 +98,7 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 **3. Pruning Loop:**
 
   * Iteratively removes the most biased columns based on the selected algorithm.
-  * At each iteration, two stopping layers are checked: (a) alignment-level convergence via empirical p-values, and (b) the delta-null criterion — the best-ranked column's delta must exceed the noise ceiling (the maximum delta expected by chance in an unbiased alignment). Pruning stops as soon as either layer signals completion.
+  * At each iteration, two stopping layers are checked: (a) alignment-level convergence via empirical p-values, and (b) the delta-null criterion — the best-ranked column's Δχ² must exceed the magnitude expected under a homogeneous alignment (per-permutation maximum Δχ²; dominated by fast-evolving residues that accumulate substitutions even without compositional bias). Pruning stops as soon as either layer signals completion.
   * **Reactive touchdown rollback**: when the alignment-level layer would fire (alignment p > 0.05 or no significantly biased taxa remain), the most recent batch is rolled back, `top_n` is reduced to `max(1, initial_top_n // 10)`, and the loop resumes. Fires at most once per run, bounding the alignment-level overshoot to ~10% of the original batch size.
 
 **4. Final Output:**
@@ -124,9 +124,9 @@ Traditional stopping asks "is the alignment still biased?" via the alignment-lev
 
 WitChi adds a per-column justification test that complements the alignment-level criterion:
 
-1. **Null distribution of column deltas**. During the permutation test phase, `--permutations` additional permuted alignments (fresh seeds, independent of the main null) are scored with the active pruning algorithm. The maximum per-column delta from each permutation forms the "noise ceiling" distribution — the largest delta an unbiased alignment would be expected to produce.
+1. **Distribution of homogeneous Δχ² maxima**. During the permutation test phase, `--permutations` additional permuted alignments (fresh seeds, independent of the main null) are scored with the active pruning algorithm. The maximum per-column delta from each permutation forms the delta-null distribution — the largest Δχ² that a *homogeneous* alignment of the same size and composition would produce. This is not noise: under rate variation across sites, fast-evolving residues accumulate substitutions and produce high per-column χ² even without compositional bias. The delta-null captures that expected magnitude.
 
-2. **Per-iteration check (adaptive walk)**. At each iteration, WitChi walks the top-`top_n` candidate columns in descending delta order. Each candidate is tested against the noise ceiling: columns whose delta exceeds it are removed, and the walk stops at the first candidate that fails. Pruning halts only when the rank-1 candidate itself fails — at that point, no column can be individually justified as a bias carrier.
+2. **Per-iteration check (adaptive walk)**. At each iteration, WitChi walks the top-`top_n` candidate columns in descending delta order. Each candidate is tested against the delta-null distribution: columns whose Δχ² exceeds what a homogeneous alignment would produce are removed, and the walk stops at the first candidate that does not. Pruning halts only when the rank-1 candidate itself fails — at that point, no column can be individually justified as a bias carrier above the homogeneous expectation.
 
 3. **Graceful touchdown**. When the alignment is strongly biased, full batches of `top_n` columns are removed per iteration. As convergence approaches, batches naturally shrink (e.g. 20 → 13 → 0) until rank-1 fails. No manual threshold is needed — the test itself dictates when to slow down.
 
