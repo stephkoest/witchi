@@ -109,5 +109,95 @@ class TestPermutationTest(unittest.TestCase):
         self.assertEqual(len(output), 5)
 
 
+class TestAlignmentPrunerWasserstein(unittest.TestCase):
+
+    def test_wasserstein_pruning(self):
+        pruner = AlignmentPruner(
+            file="tests/data/example.nex",
+            format="nexus",
+            max_residue_pruned=10,
+            permutations=50,
+            num_workers_chisq=1,
+            num_workers_permute=1,
+            top_n=1,
+            pruning_algorithm="wasserstein",
+        )
+        pruner.run()
+        base = "tests/data/example_wasserstein_s1_pruned"
+        assert os.path.exists(base + ".fasta")
+        assert os.path.exists(base + ".tsv")
+        assert os.path.exists(base + "_scores.tsv")
+        assert os.path.exists(base + "_score_dict.json")
+
+
+class TestDeltaNull(unittest.TestCase):
+    """Tests for the delta null stopping criterion."""
+
+    def _make_pruner(self, algorithm="quartic", permutations=50, **kwargs):
+        pruner = AlignmentPruner(
+            file="tests/data/example.nex",
+            format="nexus",
+            max_residue_pruned=10,
+            permutations=permutations,
+            num_workers_chisq=1,
+            num_workers_permute=1,
+            top_n=1,
+            pruning_algorithm=algorithm,
+            **kwargs,
+        )
+        return pruner
+
+    def _setup_pruner_for_null_deltas(self, pruner):
+        """Run permutation test and precompute Z parameters."""
+        from witchi.alignment_pruner.alignment_reader import AlignmentReader
+        from witchi.alignment_pruner.sequence_type_detector import SequenceTypeDetector
+        from witchi.alignment_pruner.chi_square_calculator import ChiSquareCalculator
+
+        reader = AlignmentReader(pruner.file, pruner.format)
+        alignment, alignment_array = reader.run()
+        _, char_set = SequenceTypeDetector.detect(alignment)
+        pruner.chi_square_calculator = ChiSquareCalculator(char_set, 1)
+        pruner.permutation_test = PermutationTest(1, pruner.permutations)
+        _, _, _, _, perm_chi2 = pruner.permutation_test.compute_null(
+            alignment_array,
+            pruner.chi_square_calculator,
+        )
+        pruner._null_z_mean = float(np.mean(perm_chi2))
+        _median = float(np.median(perm_chi2))
+        _mad = float(np.median(np.abs(perm_chi2 - _median)))
+        pruner._null_z_scale = _mad / 0.6745
+        null_z = (perm_chi2 - pruner._null_z_mean) / pruner._null_z_scale
+        K = min(200, len(null_z))
+        positions = np.linspace(0, 1, K + 2)[1:-1]
+        pruner._null_z_quantiles = np.quantile(null_z, positions)
+        return alignment_array
+
+    def test_compute_null_deltas_shape_squared(self):
+        pruner = self._make_pruner(algorithm="squared")
+        self._setup_pruner_for_null_deltas(pruner)
+        pruner._compute_null_deltas(self._setup_pruner_for_null_deltas(pruner))
+        self.assertEqual(pruner._null_max_deltas.shape, (100,))
+        self.assertTrue(np.all(pruner._null_max_deltas >= 0))
+
+    def test_compute_null_deltas_shape_quartic(self):
+        pruner = self._make_pruner(algorithm="quartic")
+        self._setup_pruner_for_null_deltas(pruner)
+        pruner._compute_null_deltas(self._setup_pruner_for_null_deltas(pruner))
+        self.assertEqual(pruner._null_max_deltas.shape, (100,))
+        self.assertTrue(np.all(pruner._null_max_deltas >= 0))
+
+    def test_compute_null_deltas_shape_wasserstein(self):
+        pruner = self._make_pruner(algorithm="wasserstein")
+        self._setup_pruner_for_null_deltas(pruner)
+        pruner._compute_null_deltas(self._setup_pruner_for_null_deltas(pruner))
+        self.assertEqual(pruner._null_max_deltas.shape, (100,))
+        self.assertTrue(np.all(pruner._null_max_deltas >= 0))
+
+    def test_delta_null_disabled(self):
+        pruner = self._make_pruner(delta_null=False)
+        pruner.run()
+        self.assertIsNone(pruner._null_max_deltas)
+
+
 if __name__ == "__main__":
     unittest.main()
