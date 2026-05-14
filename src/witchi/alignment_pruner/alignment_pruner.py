@@ -109,7 +109,6 @@ class AlignmentPruner:
             sums,
             upper_threshold,
             permutated_per_row_chi2,
-            alignment=alignment,
         )
 
         pruned_sequences = self.update_sequences(alignment, pruned_alignment_array)
@@ -297,7 +296,6 @@ class AlignmentPruner:
         sums,
         upper_threshold,
         permutated_per_row_chi2,
-        alignment=None,
     ):
         """Recursively prune the alignment array."""
         prune_dict = {}
