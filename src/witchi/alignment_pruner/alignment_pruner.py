@@ -3,8 +3,13 @@ import os
 import time
 from Bio.Seq import Seq
 from Bio.Align import MultipleSeqAlignment
+from joblib import Parallel, delayed
 
-from .chi_square_calculator import ChiSquareCalculator
+from .chi_square_calculator import (
+    ChiSquareCalculator,
+    _count_rows_from_int,
+    _encode_alignment_int,
+)
 from .permutation_test import PermutationTest
 from .sequence_type_detector import SequenceTypeDetector
 from .alignment_reader import AlignmentReader
@@ -18,6 +23,8 @@ from .utils import (
 
 
 class AlignmentPruner:
+    _DELTA_NULL_PERMUTATIONS = 100
+
     def __init__(
         self,
         file,
@@ -28,7 +35,8 @@ class AlignmentPruner:
         num_workers_permute=1,
         top_n=10,
         pruning_algorithm="squared",
-        touchdown=False,
+        strict=False,
+        delta_null=True,
     ):
         self.file = file
         self.format = format
@@ -36,12 +44,14 @@ class AlignmentPruner:
         self.permutations = permutations
         self.num_workers_chisq = num_workers_chisq
         self.num_workers_permute = num_workers_permute
-        self.touchdown = touchdown
+        self.strict = strict
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
+        self.delta_null = delta_null
         self.chi_square_calculator = None
         self.alignment_size = None
         self.initial_top_n = self.top_n
+        self._null_max_deltas = None
         self.prune_strategies = {
             "squared": self._prune_squared,
             "quartic": self._prune_quartic,
@@ -67,9 +77,32 @@ class AlignmentPruner:
         self.permutation_test = PermutationTest(
             self.num_workers_permute, self.permutations
         )
-        sums, maxes, upper_box_threshold, upper_threshold, permutated_per_row_chi2 = (
-            self.permutation_test.run(alignment_array, self.chi_square_calculator)
+        (
+            sums,
+            maxes,
+            upper_box_threshold,
+            upper_threshold,
+            permutated_per_row_chi2,
+        ) = self.permutation_test.compute_null(
+            alignment_array,
+            self.chi_square_calculator,
         )
+
+        # Precompute Z-score parameters from pooled null (consistent with _robust_zscore)
+        self._null_z_mean = float(np.mean(permutated_per_row_chi2))
+        _median = float(np.median(permutated_per_row_chi2))
+        _mad = float(np.median(np.abs(permutated_per_row_chi2 - _median)))
+        self._null_z_scale = _mad / 0.6745
+
+        # Compress null Z-scores to quantiles for Wasserstein pruning.
+        null_z = (permutated_per_row_chi2 - self._null_z_mean) / self._null_z_scale
+        K = min(200, len(null_z))
+        positions = np.linspace(0, 1, K + 2)[1:-1]
+        self._null_z_quantiles = np.quantile(null_z, positions)
+
+        if self.delta_null:
+            print("Computing null delta distribution for stopping criterion...")
+            self._compute_null_deltas(alignment_array)
 
         pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(
             alignment_array,
@@ -80,11 +113,8 @@ class AlignmentPruner:
 
         pruned_sequences = self.update_sequences(alignment, pruned_alignment_array)
         pruned_alignment = MultipleSeqAlignment(pruned_sequences)
-        # add touchdown suffix if applicable
-        if self.touchdown:
-            suffix = f"_{self.pruning_algorithm}_s{self.top_n}_touchdown_pruned.fasta"
-        else:
-            suffix = f"_{self.pruning_algorithm}_s{self.top_n}_pruned.fasta"
+        # build output filename suffix
+        suffix = f"_{self.pruning_algorithm}_s{self.top_n}_pruned.fasta"
         output_alignment_pruned_file = os.path.splitext(self.file)[0] + suffix
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", ".tsv"
@@ -95,9 +125,9 @@ class AlignmentPruner:
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", ".tsv"
         )
-        # something to clean later, reintegrate into the main function
         empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
-            score_dict["after_real"], permutated_per_row_chi2
+            score_dict["after_real"],
+            permutated_per_row_chi2,
         )
         row_empirical_pvalue_dict = make_score_dict(
             score_dict["after_real"],
@@ -146,7 +176,7 @@ class AlignmentPruner:
             expected_observed, count_rows_array
         )
         chi2_differences = self.chi_square_calculator.calculate_global_chi2_difference(
-            count_rows_array, alignment_array, initial_global_chi2
+            count_rows_array, self._alignment_int, initial_global_chi2
         )
         return initial_global_chi2, chi2_differences
 
@@ -157,7 +187,7 @@ class AlignmentPruner:
             )
         )
         chi2_differences = self.chi_square_calculator.calculate_quartic_chi2_difference(
-            count_rows_array, alignment_array, initial_global_chi2
+            count_rows_array, self._alignment_int, initial_global_chi2
         )
         return initial_global_chi2, chi2_differences
 
@@ -168,13 +198,97 @@ class AlignmentPruner:
         count_rows_array,
         permutated_per_row_chi2,
     ):
-        wasserstein = self.chi_square_calculator.calculate_row_chi2_wasserstein(
-            expected_observed, count_rows_array, permutated_per_row_chi2
+        wasserstein = self.chi_square_calculator.calculate_row_zscore_wasserstein(
+            expected_observed,
+            count_rows_array,
+            self._null_z_quantiles,
+            self._null_z_mean,
+            self._null_z_scale,
         )
-        chi2_differences = self.chi_square_calculator.calculate_wasserstein_difference(
-            count_rows_array, alignment_array, wasserstein, permutated_per_row_chi2
+        chi2_differences = (
+            self.chi_square_calculator.calculate_wasserstein_zscore_difference(
+                count_rows_array,
+                self._alignment_int,
+                wasserstein,
+                self._null_z_quantiles,
+                self._null_z_mean,
+                self._null_z_scale,
+            )
         )
         return wasserstein, chi2_differences
+
+    def _compute_null_deltas(self, alignment_array):
+        """Compute null distribution of max per-column delta scores.
+
+        For each of P_null permuted alignments, compute per-column deltas
+        using the active pruning algorithm, then record the maximum delta.
+        The resulting distribution tests whether observed deltas during
+        pruning are distinguishable from chance.
+        """
+        p_null = self._DELTA_NULL_PERMUTATIONS
+        char_set = self.chi_square_calculator.char_set
+
+        def compute_one(i):
+            iter_seed = 12345 + self.permutations + i
+            rng = np.random.default_rng(iter_seed)
+            permuted_array = np.apply_along_axis(rng.permutation, 0, alignment_array)
+            count_rows = self.chi_square_calculator.calculate_row_counts(permuted_array)
+            expected = self.chi_square_calculator.calculate_expected_observed(
+                count_rows
+            )
+            permuted_int = _encode_alignment_int(permuted_array, char_set)
+            if self.pruning_algorithm == "squared":
+                initial = self.chi_square_calculator.calculate_global_chi2(
+                    expected, count_rows
+                )
+                deltas = self.chi_square_calculator.calculate_global_chi2_difference(
+                    count_rows, permuted_int, initial
+                )
+            elif self.pruning_algorithm == "quartic":
+                initial = self.chi_square_calculator.calculate_quartic_row_global_chi2(
+                    expected, count_rows
+                )
+                deltas = self.chi_square_calculator.calculate_quartic_chi2_difference(
+                    count_rows, permuted_int, initial
+                )
+            elif self.pruning_algorithm == "wasserstein":
+                initial = self.chi_square_calculator.calculate_row_zscore_wasserstein(
+                    expected,
+                    count_rows,
+                    self._null_z_quantiles,
+                    self._null_z_mean,
+                    self._null_z_scale,
+                )
+                deltas = (
+                    self.chi_square_calculator.calculate_wasserstein_zscore_difference(
+                        count_rows,
+                        permuted_int,
+                        initial,
+                        self._null_z_quantiles,
+                        self._null_z_mean,
+                        self._null_z_scale,
+                    )
+                )
+            else:
+                raise ValueError(f"Unknown pruning algorithm: {self.pruning_algorithm}")
+            return max(deltas.values())
+
+        # Avoid nested joblib: outer loop owns all worker capacity here.
+        saved_chisq_workers = self.chi_square_calculator.num_workers
+        self.chi_square_calculator.num_workers = 1
+        try:
+            max_deltas_list = Parallel(n_jobs=self.num_workers_permute)(
+                delayed(compute_one)(i) for i in range(p_null)
+            )
+        finally:
+            self.chi_square_calculator.num_workers = saved_chisq_workers
+        max_deltas = np.asarray(max_deltas_list, dtype=np.float64)
+        self._null_max_deltas = max_deltas
+        print(
+            f"Null max-delta distribution (n={p_null}): "
+            f"mean={np.mean(max_deltas):.6f}, "
+            f"p95={np.percentile(max_deltas, 95):.6f}"
+        )
 
     def recursive_prune(
         self,
@@ -191,18 +305,34 @@ class AlignmentPruner:
         self.alignment_size = alignment_array.shape[1]
         original_indices = list(range(alignment_array.shape[1]))
 
-        mean_perm_chi2 = np.mean(permutated_per_row_chi2)
-        sd_perm_chi2 = np.std(permutated_per_row_chi2)
+        from .utils import _robust_zscore
+
         top_n_indices = []
         initial_global_chi2 = None
         chi2_differences = {}
+
+        # Reactive touchdown rollback state: keep a reference to the
+        # original alignment so we can reconstruct it (via prune_dict)
+        # when rolling back the overshoot batch. in_touchdown flips True
+        # after the first rollback so we don't rollback a second time.
+        original_alignment_array = alignment_array
+        in_touchdown = False
+
+        # Across-iteration caches for the inner chi^2 path: encoded
+        # alignment (int8 codepoints) and un-fudged char counts. Both are
+        # maintained incrementally as columns are removed so each
+        # iteration avoids re-encoding the alignment and re-counting
+        # characters. Rebuilt on touchdown rollback.
+        char_set = self.chi_square_calculator.char_set
+        n_chars = len(char_set)
+        self._alignment_int = _encode_alignment_int(alignment_array, char_set)
+        self._count_rows_raw = _count_rows_from_int(self._alignment_int, n_chars)
 
         while removed_columns_count < self.max_residue_pruned:
             stats = self._calculate_per_row_stats(alignment_array)
             count_rows_array = stats["count_rows"]
             expected_observed = stats["expected_observed"]
             per_row_chi2 = stats["per_row_chi2"]
-            upper_chi_quantile = stats["q95"]
             global_chi2 = stats["sum"]
 
             alignment_empirical_p, significant_count = self._calc_empirical_pvals(
@@ -234,14 +364,50 @@ class AlignmentPruner:
                 stats, permutated_per_row_chi2, alignment_empirical_p, significant_count
             )
 
+            alignment_z = _robust_zscore(np.sum(per_row_chi2), sums)
+
             print(
                 f"Columns removed: {removed_columns_count}, "
                 f"{(removed_columns_count / self.alignment_size) * 100:.2f}% | "
                 f"Biased taxa permutation: {significant_count} | "
-                f"Mean Z-score: {(np.mean(per_row_chi2) - mean_perm_chi2) / sd_perm_chi2:.2f} | "
-                f"q95 Z-score: {(upper_chi_quantile - upper_threshold) / sd_perm_chi2:.2f} | "
+                f"Alignment Z-score: {alignment_z:.2f} | "
                 f"Alignment p-value: {alignment_empirical_p:.2f}"
             )
+
+            # Reactive touchdown rollback: undo the most recent batch
+            # and continue with a 10x smaller top_n. Bounds the overshoot
+            # from either signal (alignment-level stop OR delta-null
+            # partial batch) and gives the adaptive walk room to engage
+            # in the final small batches. Fires at most once per run.
+            target_top_n = max(1, self.initial_top_n // 10)
+            if (
+                should_stop
+                and not in_touchdown
+                and self.top_n > target_top_n
+                and len(top_n_indices) > 0
+            ):
+                alignment_array, original_indices, n_recent = (
+                    self._do_touchdown_rollback(
+                        top_n_indices,
+                        prune_dict,
+                        original_alignment_array,
+                        target_top_n,
+                        char_set,
+                        n_chars,
+                    )
+                )
+                removed_columns_count -= n_recent
+                in_touchdown = True
+                top_n_indices = []
+
+                print(
+                    f"Touchdown: alignment-level overshoot "
+                    f"(reason='{stop_reason}', "
+                    f"alignment_p={alignment_empirical_p:.3f}). "
+                    f"Rolled back {n_recent} columns, reduced top_n to "
+                    f"{target_top_n}, resuming pruning."
+                )
+                continue
 
             if should_stop:
                 print(f"Pruning complete. Exiting because of {stop_reason}.")
@@ -254,9 +420,87 @@ class AlignmentPruner:
                 permutated_per_row_chi2,
             )
 
-            # Sort the columns by the chi2 difference and get the top n columns to prune
-            top_n_indices = np.argsort(list(chi2_differences.values()))[-self.top_n :]
+            # Sort candidates in descending delta order, take up to top_n
+            sorted_candidates = sorted(
+                chi2_differences.items(), key=lambda x: x[1], reverse=True
+            )[: self.top_n]
+
+            # Delta null: walk candidates and remove those above the null max.
+            # Stops at first failure within the batch, giving graceful
+            # touchdown — batch size naturally shrinks as we approach
+            # convergence. Exits the pruning loop only when rank-1 itself
+            # fails (zero columns justified in this iteration).
+            if self._null_max_deltas is not None:
+                justified = []
+                last_p = None
+                for col, delta in sorted_candidates:
+                    last_p = np.sum(self._null_max_deltas >= delta) / len(
+                        self._null_max_deltas
+                    )
+                    if last_p > 0.05:
+                        break
+                    justified.append(col)
+
+                if not justified:
+                    max_delta = sorted_candidates[0][1]
+                    print(
+                        f"Pruning complete. Exiting because of delta not "
+                        f"significant (p={last_p:.3f}, "
+                        f"max_delta={max_delta:.6f})."
+                    )
+                    break
+
+                if len(justified) < len(sorted_candidates):
+                    fail_delta = sorted_candidates[len(justified)][1]
+                    # Harmonised touchdown: a partial batch means the
+                    # current top_n was too aggressive. If the touchdown
+                    # budget is unspent and a previous batch exists, roll
+                    # it back and resume with reduced top_n (same
+                    # mechanism as the alignment-level overshoot path).
+                    if (
+                        not in_touchdown
+                        and self.top_n > target_top_n
+                        and len(top_n_indices) > 0
+                    ):
+                        alignment_array, original_indices, n_recent = (
+                            self._do_touchdown_rollback(
+                                top_n_indices,
+                                prune_dict,
+                                original_alignment_array,
+                                target_top_n,
+                                char_set,
+                                n_chars,
+                            )
+                        )
+                        removed_columns_count -= n_recent
+                        in_touchdown = True
+                        top_n_indices = []
+                        print(
+                            f"Touchdown: delta-null partial batch "
+                            f"(rank {len(justified) + 1} fails at "
+                            f"p={last_p:.3f}, delta={fail_delta:.6f}). "
+                            f"Rolled back {n_recent} columns, reduced "
+                            f"top_n to {target_top_n}, resuming pruning."
+                        )
+                        continue
+                    print(
+                        f"  Partial batch: removing {len(justified)}/"
+                        f"{len(sorted_candidates)} columns "
+                        f"(rank {len(justified) + 1} fails at "
+                        f"p={last_p:.3f}, delta={fail_delta:.6f})"
+                    )
+            else:
+                justified = [col for col, _ in sorted_candidates]
+
+            top_n_indices = np.array(justified)
+            # Decrement cached raw counts by the removed columns'
+            # contributions, then drop the columns from both the string
+            # and int8 forms in lockstep.
+            self._count_rows_raw -= _count_rows_from_int(
+                self._alignment_int[:, top_n_indices], n_chars
+            )
             alignment_array = np.delete(alignment_array, top_n_indices, axis=1)
+            self._alignment_int = np.delete(self._alignment_int, top_n_indices, axis=1)
             iteration += 1
 
         score_dict["after_real"] = per_row_chi2
@@ -270,14 +514,12 @@ class AlignmentPruner:
         Check whether pruning should stop based on empirical p-values.
         Returns: (should_stop: bool, reason: str, significant_count: int)
         """
-        if self.touchdown:
-            if stats["median"] <= np.percentile(permuted_chi2, 99):
-                new_top_n = int(self.alignment_size / 1000)
-                if new_top_n < self.top_n:
-                    self.top_n = new_top_n
+        if alignment_empirical_p > 0.05 and significant_count == 0:
+            return True, "convergence"
 
-        if alignment_empirical_p >= 0.95:
-            return True, "alignment p-value"
+        if not self.strict:
+            if alignment_empirical_p > 0.05:
+                return True, "alignment p-value"
 
         if significant_count == 0:
             return True, "no significant taxa"
@@ -285,22 +527,61 @@ class AlignmentPruner:
         return False, None
 
     def _calc_empirical_pvals(self, stats, permuted_sums, permuted_chi2):
-        """Calculate empirical p-values for alignment and taxa based on chi2 and permuted chi2."""
+        """Calculate empirical p-values for alignment and taxa."""
         alignment_empirical_p = self.permutation_test.calc_empirical_pvalue(
             stats["sum"], permuted_sums
         )[0]
         empirical_pvals = self.permutation_test.calc_empirical_pvalue(
-            stats["per_row_chi2"], permuted_chi2
+            stats["per_row_chi2"],
+            permuted_chi2,
         )
         significant_count = sum(p <= 0.05 for p in empirical_pvals)
-
         return alignment_empirical_p, significant_count
+
+    def _do_touchdown_rollback(
+        self,
+        top_n_indices,
+        prune_dict,
+        original_alignment_array,
+        target_top_n,
+        char_set,
+        n_chars,
+    ):
+        """Roll back the most recent applied batch and reduce top_n.
+
+        Mutates `prune_dict` (deletes the last batch's entries) and
+        `self.top_n`, `self._alignment_int`, `self._count_rows_raw`.
+        Returns (alignment_array, original_indices, n_recent) for the
+        caller to install.
+        """
+        n_recent = len(top_n_indices)
+        recent_cols = list(prune_dict.keys())[-n_recent:]
+        for col in recent_cols:
+            del prune_dict[col]
+
+        cols_to_remove = sorted(prune_dict.keys())
+        if cols_to_remove:
+            alignment_array = np.delete(
+                original_alignment_array, cols_to_remove, axis=1
+            )
+        else:
+            alignment_array = original_alignment_array
+        original_indices = [
+            i
+            for i in range(original_alignment_array.shape[1])
+            if i not in set(cols_to_remove)
+        ]
+        # Rebuild the cached encoded alignment + raw counts to match
+        # the rolled-back string alignment. Touchdown fires at most
+        # once per run, so the from-scratch cost is fine.
+        self._alignment_int = _encode_alignment_int(alignment_array, char_set)
+        self._count_rows_raw = _count_rows_from_int(self._alignment_int, n_chars)
+        self.top_n = target_top_n
+        return alignment_array, original_indices, n_recent
 
     def _calculate_per_row_stats(self, alignment_array):
         """Calculate row-wise chi² statistics and summary metrics."""
-        count_rows_array = self.chi_square_calculator.calculate_row_counts(
-            alignment_array
-        )
+        count_rows_array = self._cached_count_rows()
         expected_observed = self.chi_square_calculator.calculate_expected_observed(
             count_rows_array
         )
@@ -314,9 +595,19 @@ class AlignmentPruner:
             "per_row_chi2": per_row_chi2,
             "median": np.median(per_row_chi2),
             "mean": np.mean(per_row_chi2),
-            "q95": np.percentile(per_row_chi2, 95),
             "sum": np.sum(per_row_chi2),
         }
+
+    def _cached_count_rows(self):
+        """Apply the +1 zero-safety fudge fresh to the cached raw counts.
+
+        The fudge is a step function on the raw counts (fires whenever any
+        cell is zero), so it is re-evaluated each iteration rather than
+        incrementally maintained.
+        """
+        if (self._count_rows_raw == 0).any():
+            return self._count_rows_raw + 1
+        return self._count_rows_raw.copy()
 
     def update_sequences(self, alignment, pruned_alignment_array):
         """Update sequences with pruned alignments."""

@@ -42,7 +42,8 @@ def main():
         type=int,
         default=1,
         help="Number of parallel workers (cores) to use for permutation testing, default is 1.\n"
-        "Scales poorly with more than 4 workers.",
+        "Controls both the main permutation test and the delta-null permutation loop.\n"
+        "Main test plateaus past ~4 workers; delta-null scales near-linearly to 18+.",
     )
     prune_parser.add_argument(
         "--top_n",
@@ -55,15 +56,19 @@ def main():
         default="quartic",
         help="Pruning algorithm to use: squared, quartic, wasserstein",
     )
-    # add touchdown
     prune_parser.add_argument(
-        "--touchdown",
+        "--strict",
         action="store_true",
-        help="If flag is set, Touchdown mode is activated (experimental!). "
-        "Consider setting top_n to around 1-2%% of the original alignment length.\n"
-        "The number of "
-        "columns to prune will be reduced to 0.1%% of the original alignment length "
-        "per iteration after a threshold of 99.0%% is reached. ",
+        help="Enforce pruning until all taxa are individually unbiased "
+        "(ignores alignment-level p-value threshold).",
+    )
+    prune_parser.add_argument(
+        "--delta-null",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Test per-column delta significance against a permutation null. "
+        "Stops pruning when no column's delta exceeds chance expectation. "
+        "Use --no-delta-null to disable.",
     )
 
     test_parser = subparsers.add_parser(
@@ -92,7 +97,6 @@ def main():
         action="store_true",
         help="Flag to create output file with scores.",
     )
-
     args = parser.parse_args()
 
     if args.command == "prune":
@@ -105,7 +109,8 @@ def main():
             num_workers_permute=args.num_workers_permute,
             top_n=args.top_n,
             pruning_algorithm=args.pruning_algorithm,
-            touchdown=args.touchdown,
+            strict=args.strict,
+            delta_null=args.delta_null,
         )
         pruner.run()
     elif args.command == "test":
