@@ -50,7 +50,7 @@ Prune alignment columns recursively based on Chi-square test:
 
 ```bash
 witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --permutations 100 \
-  --num_workers_chisq 2 --num_workers_permute 1 --top_n 2 --pruning_algorithm quartic
+  --num_workers_chisq 2 --num_workers_permute 1 --top_n 2
 ```
 
 #### Options:
@@ -61,7 +61,7 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--num_workers_chisq`: Number of CPU threads for chi-square calculations (default: 1).
 - `--num_workers_permute`: Number of CPU threads for permutation parallelization. Controls both the main permutation test and the delta-null permutation loop (default: 1).
 - `--top_n`: Number of top biased columns to prune per iteration (default: 1).
-- `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic).
+- `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic; default: wasserstein).
 - `--strict`: Enforce pruning until all taxa are individually unbiased (ignores alignment-level p-value threshold).
 - `--delta-null` / `--no-delta-null`: Enable/disable the delta-null stopping criterion (default: enabled). When enabled, WitChi also tests whether the best-ranked column's delta exceeds a permutation-based noise ceiling, and stops pruning when it doesn't.
 

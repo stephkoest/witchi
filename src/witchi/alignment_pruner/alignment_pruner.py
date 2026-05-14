@@ -34,7 +34,7 @@ class AlignmentPruner:
         num_workers_chisq=1,
         num_workers_permute=1,
         top_n=10,
-        pruning_algorithm="squared",
+        pruning_algorithm="wasserstein",
         strict=False,
         delta_null=True,
     ):

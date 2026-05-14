@@ -53,8 +53,8 @@ def main():
     )
     prune_parser.add_argument(
         "--pruning_algorithm",
-        default="quartic",
-        help="Pruning algorithm to use: squared, quartic, wasserstein",
+        default="wasserstein",
+        help="Pruning algorithm to use: squared, quartic, wasserstein (default: wasserstein)",
     )
     prune_parser.add_argument(
         "--strict",
