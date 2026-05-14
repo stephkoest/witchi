@@ -1,11 +1,12 @@
 """
 Similarity-stratified permutation testing for WitChi.
 
-Assigns taxa to strata based on evolutionary isolation (mean k-NN distance
-in a seed-projection space) and performs global-baseline column permutation
-within strata.  This preserves the correlation structure imposed by shared
-evolutionary history on uneven trees, producing a null distribution that
-accounts for branch-length-driven compositional drift.
+Assigns taxa to strata based on evolutionary isolation (min nearest-neighbour
+distance under gap-aware Hamming, a direct proxy for terminal branch length)
+and performs global-baseline column permutation within strata.  This preserves
+the correlation structure imposed by shared evolutionary history on uneven
+trees, producing a null distribution that accounts for branch-length-driven
+compositional drift.
 
 Standard permutation is the special case where all taxa belong to one
 stratum.
@@ -107,13 +108,14 @@ def run_similarity_stratified(
     chi_square_calculator,
     permutation_test,
     max_clusters=None,
-    n_neighbours=6,
-    n_seeds=None,
+    n_neighbours=None,  # deprecated; isolation is exact min-NN
+    n_seeds=None,  # deprecated; no projection step
 ):
     """Run similarity-stratified permutation test.
 
-    Assigns taxa to strata by evolutionary isolation (mean k-NN distance),
-    then performs global-baseline column permutation within strata.
+    Assigns taxa to strata by evolutionary isolation (min nearest-neighbour
+    distance under gap-aware Hamming), then performs global-baseline column
+    permutation within strata.
 
     Parameters
     ----------
@@ -127,10 +129,10 @@ def run_similarity_stratified(
         Instance used for the permutation loop and summary statistics.
     max_clusters : int or None
         Upper bound on strata count.  Default: min(20, N // min_stratum_size).
-    n_neighbours : int
-        k-NN connectivity for the isolation metric (default 6).
-    n_seeds : int or None
-        Seed count for distance projection.  Default: auto.
+    n_neighbours : int, optional
+        Deprecated.  Kept for API compatibility; ignored.
+    n_seeds : int, optional
+        Deprecated.  Kept for API compatibility; ignored.
 
     Returns
     -------
