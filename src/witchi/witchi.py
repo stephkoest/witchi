@@ -57,12 +57,6 @@ def main():
         help="Pruning algorithm to use: squared, quartic, wasserstein (default: wasserstein)",
     )
     prune_parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Enforce pruning until all taxa are individually unbiased "
-        "(ignores alignment-level p-value threshold).",
-    )
-    prune_parser.add_argument(
         "--delta-null",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -109,7 +103,6 @@ def main():
             num_workers_permute=args.num_workers_permute,
             top_n=args.top_n,
             pruning_algorithm=args.pruning_algorithm,
-            strict=args.strict,
             delta_null=args.delta_null,
         )
         pruner.run()

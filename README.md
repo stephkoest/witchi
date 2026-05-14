@@ -62,7 +62,6 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--num_workers_permute`: Number of CPU threads for permutation parallelization. Controls both the main permutation test and the delta-null permutation loop (default: 1).
 - `--top_n`: Number of top biased columns to prune per iteration (default: 1).
 - `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic; default: wasserstein).
-- `--strict`: Enforce pruning until all taxa are individually unbiased (ignores alignment-level p-value threshold).
 - `--delta-null` / `--no-delta-null`: Enable/disable the delta-null stopping criterion (default: enabled). When enabled, WitChi also tests whether the best-ranked column's delta exceeds a permutation-based noise ceiling, and stops pruning when it doesn't.
 
 ### Permutation Testing

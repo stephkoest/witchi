@@ -33,7 +33,6 @@ class AlignmentPruner:
         num_workers_permute=1,
         top_n=10,
         pruning_algorithm="wasserstein",
-        strict=False,
         delta_null=True,
     ):
         self.file = file
@@ -42,7 +41,6 @@ class AlignmentPruner:
         self.permutations = permutations
         self.num_workers_chisq = num_workers_chisq
         self.num_workers_permute = num_workers_permute
-        self.strict = strict
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
         self.delta_null = delta_null
@@ -359,7 +357,7 @@ class AlignmentPruner:
                 ]
 
             should_stop, stop_reason = self._check_stopping_criteria(
-                stats, permutated_per_row_chi2, alignment_empirical_p, significant_count
+                alignment_empirical_p
             )
 
             alignment_z = _robust_zscore(np.sum(per_row_chi2), sums)
@@ -505,23 +503,10 @@ class AlignmentPruner:
         self.top_n = self.initial_top_n
         return alignment_array, prune_dict, score_dict
 
-    def _check_stopping_criteria(
-        self, stats, permuted_chi2, alignment_empirical_p, significant_count
-    ):
-        """
-        Check whether pruning should stop based on empirical p-values.
-        Returns: (should_stop: bool, reason: str, significant_count: int)
-        """
-        if alignment_empirical_p > 0.05 and significant_count == 0:
-            return True, "convergence"
-
-        if not self.strict:
-            if alignment_empirical_p > 0.05:
-                return True, "alignment p-value"
-
-        if significant_count == 0:
-            return True, "no significant taxa"
-
+    def _check_stopping_criteria(self, alignment_empirical_p):
+        """Stop pruning when the alignment-level empirical p-value exceeds 0.05."""
+        if alignment_empirical_p > 0.05:
+            return True, "alignment p-value"
         return False, None
 
     def _calc_empirical_pvals(self, stats, permuted_sums, permuted_chi2):
