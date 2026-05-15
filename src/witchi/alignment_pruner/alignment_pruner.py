@@ -17,8 +17,8 @@ from .utils import (
     write_alignment,
     write_pruned_dict_to_tsv,
     write_score_dict_to_json,
-    write_score_dict_to_tsv,
-    make_score_dict,
+    write_before_after_score_dict_to_tsv,
+    make_before_after_score_dict,
 )
 
 
@@ -48,6 +48,9 @@ class AlignmentPruner:
         self.alignment_size = None
         self.initial_top_n = self.top_n
         self._null_max_deltas = None
+        self._stop_reason = None
+        self._before_stats = None
+        self._after_stats = None
         self.prune_strategies = {
             "squared": self._prune_squared,
             "quartic": self._prune_quartic,
@@ -121,29 +124,54 @@ class AlignmentPruner:
         output_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", ".tsv"
         )
-        empirical_pvalues = self.permutation_test.calc_empirical_pvalue(
+        empirical_pvalues_after = self.permutation_test.calc_empirical_pvalue(
             score_dict["after_real"],
             permutated_per_row_chi2,
         )
-        row_empirical_pvalue_dict = make_score_dict(
+        empirical_pvalues_before = self.permutation_test.calc_empirical_pvalue(
+            score_dict["before_real"],
+            permutated_per_row_chi2,
+        )
+        before_after_dict = make_before_after_score_dict(
+            score_dict["before_real"],
             score_dict["after_real"],
             permutated_per_row_chi2,
-            empirical_pvalues,
+            empirical_pvalues_before,
+            empirical_pvalues_after,
             alignment,
         )
         output_score_tsv_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_scores.tsv"
         )
-        write_score_dict_to_tsv(row_empirical_pvalue_dict, output_score_tsv_file)
+        write_before_after_score_dict_to_tsv(before_after_dict, output_score_tsv_file)
         # NOW MAKE JSON
         output_json_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_score_dict.json"
         )
         write_score_dict_to_json(score_dict, output_json_file)
-        print(f"Pruned {len(prune_dict.keys())} columns.")
+
+        n_taxa = len(alignment)
+        n_input_cols = self.alignment_size
+        n_removed = len(prune_dict)
+        n_output_cols = n_input_cols - n_removed
+        pct = (n_removed / n_input_cols) * 100 if n_input_cols else 0.0
+        before = self._before_stats or {
+            "z": float("nan"),
+            "p": float("nan"),
+            "biased": 0,
+        }
+        after = self._after_stats or before
+        print(
+            f"Pruned {n_input_cols} → {n_output_cols} columns "
+            f"(-{n_removed}, {pct:.2f}%) | "
+            f"Z {before['z']:.2f} → {after['z']:.2f} | "
+            f"p {before['p']:.2f} → {after['p']:.2f} | "
+            f"biased {before['biased']}/{n_taxa} → {after['biased']}/{n_taxa} | "
+            f"stop: {self._stop_reason}"
+        )
         print(f"Pruned alignment saved to {output_alignment_pruned_file}")
         print(f"Columns pruned in order saved to: {output_tsv_file}")
-        print(f"Taxa p-values and z-scores printed to {output_score_tsv_file}")
+        print(f"Taxa before/after Z and p-values printed to {output_score_tsv_file}")
         print(f"Chiscore values from permutation testing printed to {output_json_file}")
 
         end_time = time.time()
@@ -334,10 +362,16 @@ class AlignmentPruner:
             alignment_empirical_p, significant_count = self._calc_empirical_pvals(
                 stats, sums, permutated_per_row_chi2
             )
+            alignment_z = _robust_zscore(np.sum(per_row_chi2), sums)
 
             if iteration == 0:
                 score_dict["before_permuted"] = permutated_per_row_chi2
                 score_dict["before_real"] = per_row_chi2
+                self._before_stats = {
+                    "z": alignment_z,
+                    "p": alignment_empirical_p,
+                    "biased": significant_count,
+                }
             else:
                 # only write to prune_dict after the first pruning iteration
                 for col in top_n_indices:
@@ -359,8 +393,6 @@ class AlignmentPruner:
             should_stop, stop_reason = self._check_stopping_criteria(
                 alignment_empirical_p
             )
-
-            alignment_z = _robust_zscore(np.sum(per_row_chi2), sums)
 
             print(
                 f"Columns removed: {removed_columns_count}, "
@@ -406,7 +438,12 @@ class AlignmentPruner:
                 continue
 
             if should_stop:
-                print(f"Pruning complete. Exiting because of {stop_reason}.")
+                self._stop_reason = stop_reason
+                self._after_stats = {
+                    "z": alignment_z,
+                    "p": alignment_empirical_p,
+                    "biased": significant_count,
+                }
                 break
 
             initial_global_chi2, chi2_differences = self.prune(
@@ -439,11 +476,15 @@ class AlignmentPruner:
 
                 if not justified:
                     max_delta = sorted_candidates[0][1]
-                    print(
-                        f"Pruning complete. Exiting because of delta not "
-                        f"significant (p={last_p:.3f}, "
-                        f"max_delta={max_delta:.6f})."
+                    self._stop_reason = (
+                        f"delta not significant (p={last_p:.3f}, "
+                        f"max_delta={max_delta:.6f})"
                     )
+                    self._after_stats = {
+                        "z": alignment_z,
+                        "p": alignment_empirical_p,
+                        "biased": significant_count,
+                    }
                     break
 
                 if len(justified) < len(sorted_candidates):
@@ -498,6 +539,48 @@ class AlignmentPruner:
             alignment_array = np.delete(alignment_array, top_n_indices, axis=1)
             self._alignment_int = np.delete(self._alignment_int, top_n_indices, axis=1)
             iteration += 1
+
+        # Natural exit (max_residue_pruned cap): the loop top-check fires
+        # AFTER the last iteration has already pruned its batch but BEFORE
+        # the next iteration's else-branch records it. Recover by recording
+        # the unlogged final batch and refreshing per-row stats so
+        # after_real matches the on-disk pruned alignment.
+        if (
+            self._stop_reason is None
+            and top_n_indices is not None
+            and len(top_n_indices) > 0
+        ):
+            final_stats = self._calculate_per_row_stats(alignment_array)
+            final_p, final_biased = self._calc_empirical_pvals(
+                final_stats, sums, permutated_per_row_chi2
+            )
+            for col in top_n_indices:
+                pruned_col = original_indices[col]
+                prune_dict[pruned_col] = [
+                    iteration,
+                    pruned_col,
+                    final_stats["sum"],
+                    initial_global_chi2,
+                    chi2_differences[col],
+                    final_biased,
+                ]
+                removed_columns_count += 1
+            per_row_chi2 = final_stats["per_row_chi2"]
+            self._stop_reason = (
+                f"reached --max_residue_pruned cap ({self.max_residue_pruned})"
+            )
+            self._after_stats = {
+                "z": _robust_zscore(np.sum(per_row_chi2), sums),
+                "p": final_p,
+                "biased": final_biased,
+            }
+        elif self._stop_reason is None:
+            # Loop never entered (cap=0) or exited with no prior pruning.
+            self._stop_reason = (
+                f"reached --max_residue_pruned cap ({self.max_residue_pruned})"
+            )
+            if self._after_stats is None:
+                self._after_stats = self._before_stats
 
         score_dict["after_real"] = per_row_chi2
         self.top_n = self.initial_top_n

@@ -64,6 +64,33 @@ def write_score_dict_to_tsv(dictionary, file_name):
             writer.writerow([row, values["empirical_pvalue"], values["zscore"]])
 
 
+def write_before_after_score_dict_to_tsv(dictionary, file_name):
+    """Write per-taxon before/after Z-scores and empirical p-values to TSV."""
+    with open(file_name, "w", newline="") as tsvfile:
+        writer = csv.writer(tsvfile, delimiter="\t")
+        writer.writerow(
+            [
+                "Row",
+                "Before-Z",
+                "Before-Pvalue",
+                "After-Z",
+                "After-Pvalue",
+                "Delta-Z",
+            ]
+        )
+        for row, v in dictionary.items():
+            writer.writerow(
+                [
+                    row,
+                    v["before_zscore"],
+                    v["before_pvalue"],
+                    v["after_zscore"],
+                    v["after_pvalue"],
+                    v["delta_zscore"],
+                ]
+            )
+
+
 def _robust_zscore(observed, null_pool):
     """Compute a robust Z-score using mean centering and MAD scaling.
 
@@ -113,3 +140,37 @@ def make_score_dict(
     )
 
     return row_empirical_pvalue_dict
+
+
+def make_before_after_score_dict(
+    before_chi2,
+    after_chi2,
+    permutated_per_row_chi2,
+    before_pvalues,
+    after_pvalues,
+    alignment,
+):
+    """Per-taxon Z and empirical p, before and after pruning, with delta-Z.
+
+    Sorted by descending before-Z (most-biased-initially first).
+    """
+    row_names = [record.id for record in alignment]
+    before = np.asarray(before_chi2)
+    after = np.asarray(after_chi2)
+    before_z = np.array(
+        [_robust_zscore(before[i], permutated_per_row_chi2) for i in range(len(before))]
+    )
+    after_z = np.array(
+        [_robust_zscore(after[i], permutated_per_row_chi2) for i in range(len(after))]
+    )
+
+    d = {}
+    for i, name in enumerate(row_names):
+        d[name] = {
+            "before_zscore": float(before_z[i]),
+            "before_pvalue": float(before_pvalues[i]),
+            "after_zscore": float(after_z[i]),
+            "after_pvalue": float(after_pvalues[i]),
+            "delta_zscore": float(after_z[i] - before_z[i]),
+        }
+    return dict(sorted(d.items(), key=lambda kv: kv[1]["before_zscore"], reverse=True))

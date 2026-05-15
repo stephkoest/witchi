@@ -13,8 +13,10 @@ from witchi.alignment_pruner.utils import (
     write_pruned_dict_to_tsv,
     write_score_dict_to_json,
     write_score_dict_to_tsv,
+    write_before_after_score_dict_to_tsv,
     _robust_zscore,
     make_score_dict,
+    make_before_after_score_dict,
 )
 
 
@@ -176,6 +178,88 @@ class TestWriteScoreDictToTsv(unittest.TestCase):
                 lines = fh.readlines()
             self.assertIn("Row", lines[0])
             # sorted by descending abs zscore: tax1 (5.0) first
+            self.assertTrue(lines[1].startswith("tax1"))
+        finally:
+            os.unlink(path)
+
+
+class TestMakeBeforeAfterScoreDict(unittest.TestCase):
+
+    def _make_alignment(self, names):
+        records = [SeqRecord(Seq("ACGT"), id=n) for n in names]
+        return MultipleSeqAlignment(records)
+
+    def test_keys_and_delta(self):
+        names = ["tax1", "tax2", "tax3"]
+        alignment = self._make_alignment(names)
+        before = np.array([20.0, 10.0, 5.0])
+        after = np.array([8.0, 9.0, 5.0])
+        null = np.random.default_rng(0).uniform(0, 15, size=300)
+        before_p = [0.01, 0.05, 0.5]
+        after_p = [0.2, 0.1, 0.5]
+
+        d = make_before_after_score_dict(
+            before, after, null, before_p, after_p, alignment
+        )
+        self.assertEqual(set(d.keys()), set(names))
+        for name in names:
+            v = d[name]
+            self.assertAlmostEqual(
+                v["delta_zscore"], v["after_zscore"] - v["before_zscore"], places=10
+            )
+
+    def test_sorted_by_before_zscore_descending(self):
+        names = ["low", "mid", "high"]
+        alignment = self._make_alignment(names)
+        before = np.array([1.0, 5.0, 20.0])
+        after = np.array([20.0, 5.0, 1.0])  # reversed
+        null = np.random.default_rng(0).uniform(0, 10, size=300)
+        before_p = [0.9, 0.5, 0.01]
+        after_p = [0.01, 0.5, 0.9]
+
+        d = make_before_after_score_dict(
+            before, after, null, before_p, after_p, alignment
+        )
+        before_z = [v["before_zscore"] for v in d.values()]
+        self.assertEqual(before_z, sorted(before_z, reverse=True))
+
+
+class TestWriteBeforeAfterScoreDictToTsv(unittest.TestCase):
+
+    def test_headers_and_rows(self):
+        d = {
+            "tax1": {
+                "before_zscore": 5.0,
+                "before_pvalue": 0.01,
+                "after_zscore": 1.5,
+                "after_pvalue": 0.3,
+                "delta_zscore": -3.5,
+            },
+            "tax2": {
+                "before_zscore": 1.0,
+                "before_pvalue": 0.5,
+                "after_zscore": 0.8,
+                "after_pvalue": 0.6,
+                "delta_zscore": -0.2,
+            },
+        }
+        with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False) as f:
+            path = f.name
+        try:
+            write_before_after_score_dict_to_tsv(d, path)
+            with open(path) as fh:
+                lines = fh.readlines()
+            header = lines[0]
+            for col in (
+                "Row",
+                "Before-Z",
+                "Before-Pvalue",
+                "After-Z",
+                "After-Pvalue",
+                "Delta-Z",
+            ):
+                self.assertIn(col, header)
+            self.assertEqual(len(lines), 3)
             self.assertTrue(lines[1].startswith("tax1"))
         finally:
             os.unlink(path)
