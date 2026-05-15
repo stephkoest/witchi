@@ -1,4 +1,5 @@
 import argparse
+from witchi import version_banner
 from witchi.alignment_pruner.alignment_pruner import AlignmentPruner
 from witchi.alignment_pruner.permutation_test import PermutationTest
 
@@ -92,6 +93,7 @@ def main():
         help="Flag to create output file with scores.",
     )
     args = parser.parse_args()
+    print(version_banner())
 
     if args.command == "prune":
         pruner = AlignmentPruner(
