@@ -1,4 +1,5 @@
 # tests/test_witchi.py
+import json
 import unittest
 from witchi.alignment_pruner.alignment_pruner import AlignmentPruner
 from witchi.alignment_pruner.permutation_test import PermutationTest
@@ -128,6 +129,53 @@ class TestAlignmentPrunerWasserstein(unittest.TestCase):
         assert os.path.exists(base + ".tsv")
         assert os.path.exists(base + "_scores.tsv")
         assert os.path.exists(base + "_score_dict.json")
+
+
+class TestScoreDictJsonSchema(unittest.TestCase):
+    """v2 _score_dict.json: provenance + reshaped null + null_max_deltas."""
+
+    def test_v2_fields_present_with_delta_null(self):
+        pruner = AlignmentPruner(
+            file="tests/data/example.nex",
+            format="nexus",
+            max_residue_pruned=5,
+            permutations=30,
+            num_workers_chisq=1,
+            num_workers_permute=1,
+            top_n=1,
+            pruning_algorithm="wasserstein",
+            delta_null=True,
+        )
+        pruner.run()
+        path = "tests/data/example_wasserstein_s1_pruned_score_dict.json"
+        with open(path) as f:
+            d = json.load(f)
+        self.assertEqual(d["schema_version"], 2)
+        self.assertIn("witchi_version", d)
+        self.assertEqual(d["algorithm"], "wasserstein")
+        self.assertIsNotNone(d["stop_reason"])
+        self.assertEqual(len(d["taxa"]), len(d["before_real"]))
+        bp = np.array(d["before_permuted"])
+        self.assertEqual(bp.shape, (30, len(d["taxa"])))
+        self.assertEqual(len(d["null_max_deltas"]), 30)
+
+    def test_null_max_deltas_none_when_disabled(self):
+        pruner = AlignmentPruner(
+            file="tests/data/example.nex",
+            format="nexus",
+            max_residue_pruned=3,
+            permutations=20,
+            num_workers_chisq=1,
+            num_workers_permute=1,
+            top_n=1,
+            pruning_algorithm="quartic",
+            delta_null=False,
+        )
+        pruner.run()
+        path = "tests/data/example_quartic_s1_pruned_score_dict.json"
+        with open(path) as f:
+            d = json.load(f)
+        self.assertIsNone(d["null_max_deltas"])
 
 
 class TestDeltaNull(unittest.TestCase):

@@ -138,9 +138,43 @@ class TestWritePrunedDictToTsv(unittest.TestCase):
             with open(path) as fh:
                 lines = fh.readlines()
             self.assertIn("Iteration", lines[0])
+            self.assertIn("Null-Pvalue", lines[0])
             self.assertIn("Algorithm", lines[0])
             self.assertEqual(len(lines), 3)  # header + 2 rows
             self.assertIn("quartic", lines[1])
+        finally:
+            os.unlink(path)
+
+    def test_null_pvalue_populated(self):
+        prune_dict = {
+            0: [1, 5, 100.0, 90.0, 10.0, 2, 0.02],
+            1: [1, 12, 100.0, 90.0, 5.0, 2, 0.05],
+        }
+        with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False, mode="w") as f:
+            path = f.name
+        try:
+            write_pruned_dict_to_tsv(prune_dict, path, "wasserstein")
+            with open(path) as fh:
+                rows = [line.rstrip("\n").split("\t") for line in fh.readlines()]
+            header = rows[0]
+            idx = header.index("Null-Pvalue")
+            self.assertEqual(rows[1][idx], "0.02")
+            self.assertEqual(rows[2][idx], "0.05")
+        finally:
+            os.unlink(path)
+
+    def test_null_pvalue_empty_when_none(self):
+        prune_dict = {
+            0: [1, 5, 100.0, 90.0, 10.0, 2, None],
+        }
+        with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False, mode="w") as f:
+            path = f.name
+        try:
+            write_pruned_dict_to_tsv(prune_dict, path, "wasserstein")
+            with open(path) as fh:
+                rows = [line.rstrip("\n").split("\t") for line in fh.readlines()]
+            idx = rows[0].index("Null-Pvalue")
+            self.assertEqual(rows[1][idx], "")
         finally:
             os.unlink(path)
 

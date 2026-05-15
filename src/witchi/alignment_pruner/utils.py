@@ -17,12 +17,14 @@ def write_pruned_dict_to_tsv(dictionary, file_name, algorithm):
         "Initial Significant ChiScore",
         "ChiScore Difference",
         "Significant taxa",
+        "Null-Pvalue",
         "Algorithm",
     ]
     with open(file_name, "w", newline="") as tsvfile:
         writer = csv.DictWriter(tsvfile, fieldnames=headers, delimiter="\t")
         writer.writeheader()
         for col, values in dictionary.items():
+            null_p = values[6] if len(values) > 6 else None
             row = {
                 "Iteration": values[0],
                 "Original Index": values[1],
@@ -30,6 +32,7 @@ def write_pruned_dict_to_tsv(dictionary, file_name, algorithm):
                 "Initial Significant ChiScore": values[3],
                 "ChiScore Difference": values[4],
                 "Significant taxa": values[5],
+                "Null-Pvalue": "" if null_p is None else null_p,
                 "Algorithm": algorithm,
             }
             writer.writerow(row)

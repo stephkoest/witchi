@@ -13,6 +13,8 @@ from .chi_square_calculator import (
 from .permutation_test import PermutationTest
 from .sequence_type_detector import SequenceTypeDetector
 from .alignment_reader import AlignmentReader
+from witchi import version_banner
+
 from .utils import (
     write_alignment,
     write_pruned_dict_to_tsv,
@@ -144,11 +146,27 @@ class AlignmentPruner:
             ".fasta", "_scores.tsv"
         )
         write_before_after_score_dict_to_tsv(before_after_dict, output_score_tsv_file)
-        # NOW MAKE JSON
+
+        # v2 score_dict: reshape pooled null back to (n_perms, n_taxa) and
+        # add provenance + the delta-null distribution that drove stopping.
+        before_permuted_2d = np.asarray(permutated_per_row_chi2).reshape(
+            self.permutations, -1
+        )
+        score_dict_out = {
+            "schema_version": 2,
+            "witchi_version": version_banner().replace("witchi ", ""),
+            "algorithm": self.pruning_algorithm,
+            "stop_reason": self._stop_reason,
+            "taxa": [record.id for record in alignment],
+            "before_real": score_dict["before_real"],
+            "after_real": score_dict["after_real"],
+            "before_permuted": before_permuted_2d,
+            "null_max_deltas": self._null_max_deltas,
+        }
         output_json_file = os.path.splitext(self.file)[0] + suffix.replace(
             ".fasta", "_score_dict.json"
         )
-        write_score_dict_to_json(score_dict, output_json_file)
+        write_score_dict_to_json(score_dict_out, output_json_file)
 
         n_taxa = len(alignment)
         n_input_cols = self.alignment_size
@@ -334,6 +352,7 @@ class AlignmentPruner:
         top_n_indices = []
         initial_global_chi2 = None
         chi2_differences = {}
+        null_pvals_for_batch = {}
 
         # Reactive touchdown rollback state: keep a reference to the
         # original alignment so we can reconstruct it (via prune_dict)
@@ -383,6 +402,7 @@ class AlignmentPruner:
                         initial_global_chi2,
                         chi2_differences[col],
                         significant_count,
+                        null_pvals_for_batch.get(col),
                     ]
                     removed_columns_count += 1
 
@@ -465,6 +485,7 @@ class AlignmentPruner:
             # fails (zero columns justified in this iteration).
             if self._null_max_deltas is not None:
                 justified = []
+                null_pvals_for_batch = {}
                 last_p = None
                 for col, delta in sorted_candidates:
                     last_p = np.sum(self._null_max_deltas >= delta) / len(
@@ -473,6 +494,7 @@ class AlignmentPruner:
                     if last_p > 0.05:
                         break
                     justified.append(col)
+                    null_pvals_for_batch[col] = float(last_p)
 
                 if not justified:
                     max_delta = sorted_candidates[0][1]
@@ -563,6 +585,7 @@ class AlignmentPruner:
                     initial_global_chi2,
                     chi2_differences[col],
                     final_biased,
+                    null_pvals_for_batch.get(col),
                 ]
                 removed_columns_count += 1
             per_row_chi2 = final_stats["per_row_chi2"]
