@@ -169,7 +169,8 @@ class PermutationTest:
             print("Top 5 taxa z-scores and corresponding empirical p-values:")
             for t in list(row_empirical_pvalue_dict.keys())[:5]:
                 print(
-                    f"{t}\t{row_empirical_pvalue_dict[t]['zscore']}\t{row_empirical_pvalue_dict[t]['empirical_pvalue']}"
+                    f"{t}\t{row_empirical_pvalue_dict[t]['zscore']:.2f}"
+                    f"\t{row_empirical_pvalue_dict[t]['empirical_pvalue']:.4f}"
                 )
         else:
             # print to console the zscore and pvalue per taxa from row_empirical_pvalue_dict
@@ -177,7 +178,8 @@ class PermutationTest:
             for t in row_empirical_pvalue_dict.keys():
                 # print it in tabular format per taxon
                 print(
-                    f"{t}\t{row_empirical_pvalue_dict[t]['zscore']}\t{row_empirical_pvalue_dict[t]['empirical_pvalue']}"
+                    f"{t}\t{row_empirical_pvalue_dict[t]['zscore']:.2f}"
+                    f"\t{row_empirical_pvalue_dict[t]['empirical_pvalue']:.4f}"
                 )
         end_time = time.time()
         elapsed_time = end_time - start_time

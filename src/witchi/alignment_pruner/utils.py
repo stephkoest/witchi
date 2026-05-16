@@ -64,7 +64,13 @@ def write_score_dict_to_tsv(dictionary, file_name):
         writer = csv.writer(tsvfile, delimiter="\t")
         writer.writerow(["Row", "Empirical-Pvalue", "Z-Score"])
         for row, values in sorted_dict.items():
-            writer.writerow([row, values["empirical_pvalue"], values["zscore"]])
+            writer.writerow(
+                [
+                    row,
+                    f"{values['empirical_pvalue']:.4f}",
+                    f"{values['zscore']:.2f}",
+                ]
+            )
 
 
 def write_before_after_score_dict_to_tsv(dictionary, file_name):
