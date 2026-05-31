@@ -50,6 +50,7 @@ class AlignmentPruner:
         self.alignment_size = None
         self.initial_top_n = self.top_n
         self._null_max_deltas = None
+        self._biased_taxa_threshold = None
         self._stop_reason = None
         self._before_stats = None
         self._after_stats = None
@@ -349,6 +350,10 @@ class AlignmentPruner:
 
         from .utils import _robust_zscore
 
+        self._biased_taxa_threshold = self._compute_biased_taxa_threshold(
+            permutated_per_row_chi2, alignment_array.shape[0]
+        )
+
         top_n_indices = []
         initial_global_chi2 = None
         chi2_differences = {}
@@ -615,16 +620,51 @@ class AlignmentPruner:
             return True, "alignment p-value"
         return False, None
 
+    def _compute_biased_taxa_threshold(self, permuted_chi2, n_taxa):
+        """Chi^2 cutoff above which a taxon counts as biased.
+
+        Equivalent to the per-taxon Bonferroni empirical test
+        clip(#{null >= obs} / M * n_taxa, 0, 1) <= 0.05, which is monotone
+        in obs and so collapses to obs > tau. With M = len(pooled null) and
+        k = floor(0.05 * M / n_taxa) the allowed null exceedances, tau is
+        the (M - k - 1)-th order statistic of the pooled null: a taxon is
+        biased iff its chi^2 strictly exceeds tau (exact in all tie cases).
+        Returns +inf when no taxon can qualify.
+        """
+        pooled = np.asarray(permuted_chi2).ravel()
+        M = pooled.size
+        if M == 0 or n_taxa <= 0:
+            return np.inf
+        k = int(np.floor(0.05 * M / n_taxa))
+        kth = M - k - 1
+        if kth < 0:
+            return np.inf
+        return float(np.partition(pooled, kth)[kth])
+
     def _calc_empirical_pvals(self, stats, permuted_sums, permuted_chi2):
-        """Calculate empirical p-values for alignment and taxa."""
+        """Alignment-level empirical p-value plus the biased-taxa diagnostic.
+
+        The alignment p-value (scalar, drives stopping) is computed exactly.
+        The biased-taxa count uses the precomputed chi^2 cutoff
+        (self._biased_taxa_threshold), which is mathematically identical to
+        the per-taxon Bonferroni empirical test but O(N) rather than
+        O(P*N^2). Falls back to the exact per-taxon computation if the
+        threshold was not precomputed.
+        """
         alignment_empirical_p = self.permutation_test.calc_empirical_pvalue(
             stats["sum"], permuted_sums
         )[0]
-        empirical_pvals = self.permutation_test.calc_empirical_pvalue(
-            stats["per_row_chi2"],
-            permuted_chi2,
-        )
-        significant_count = sum(p <= 0.05 for p in empirical_pvals)
+        per_row_chi2 = stats["per_row_chi2"]
+        if self._biased_taxa_threshold is not None:
+            significant_count = int(
+                np.sum(np.asarray(per_row_chi2) > self._biased_taxa_threshold)
+            )
+        else:
+            empirical_pvals = self.permutation_test.calc_empirical_pvalue(
+                per_row_chi2,
+                permuted_chi2,
+            )
+            significant_count = sum(p <= 0.05 for p in empirical_pvals)
         return alignment_empirical_p, significant_count
 
     def _do_touchdown_rollback(
