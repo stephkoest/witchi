@@ -391,6 +391,11 @@ class AlignmentPruner:
         self._biased_taxa_threshold = self._compute_biased_taxa_threshold(
             permutated_per_row_chi2, alignment_array.shape[0]
         )
+        # Original (fixed) null refs for the reported before/after summary,
+        # so it shares one yardstick with _scores.tsv even when the stopping
+        # null is later recomputed.
+        original_sums = sums
+        original_threshold = self._biased_taxa_threshold
 
         top_n_indices = []
         initial_global_chi2 = None
@@ -431,11 +436,9 @@ class AlignmentPruner:
             if iteration == 0:
                 score_dict["before_permuted"] = permutated_per_row_chi2
                 score_dict["before_real"] = per_row_chi2
-                self._before_stats = {
-                    "z": alignment_z,
-                    "p": alignment_empirical_p,
-                    "biased": significant_count,
-                }
+                self._before_stats = self._reported_alignment_stats(
+                    per_row_chi2, original_sums, original_threshold
+                )
             else:
                 # only write to prune_dict after the first pruning iteration
                 for col in top_n_indices:
@@ -509,11 +512,9 @@ class AlignmentPruner:
                 if rolled:
                     continue
                 self._stop_reason = stop_reason
-                self._after_stats = {
-                    "z": alignment_z,
-                    "p": alignment_empirical_p,
-                    "biased": significant_count,
-                }
+                self._after_stats = self._reported_alignment_stats(
+                    per_row_chi2, original_sums, original_threshold
+                )
                 break
 
             initial_global_chi2, chi2_differences = self.prune(
@@ -558,11 +559,9 @@ class AlignmentPruner:
                         f"delta not significant (p={last_p:.3f}, "
                         f"max_delta={max_delta:.6f})"
                     )
-                    self._after_stats = {
-                        "z": alignment_z,
-                        "p": alignment_empirical_p,
-                        "biased": significant_count,
-                    }
+                    self._after_stats = self._reported_alignment_stats(
+                        per_row_chi2, original_sums, original_threshold
+                    )
                     break
 
                 if len(justified) < len(sorted_candidates):
@@ -636,7 +635,8 @@ class AlignmentPruner:
             and len(top_n_indices) > 0
         ):
             final_stats = self._calculate_per_row_stats(alignment_array)
-            final_p, final_biased = self._calc_empirical_pvals(
+            # operative-null biased count for the prune-trace row below
+            _, final_biased = self._calc_empirical_pvals(
                 final_stats, sums, permutated_per_row_chi2
             )
             for col in top_n_indices:
@@ -655,11 +655,9 @@ class AlignmentPruner:
             self._stop_reason = (
                 f"reached --max_residue_pruned cap ({self.max_residue_pruned})"
             )
-            self._after_stats = {
-                "z": _robust_zscore(np.sum(per_row_chi2), sums),
-                "p": final_p,
-                "biased": final_biased,
-            }
+            self._after_stats = self._reported_alignment_stats(
+                per_row_chi2, original_sums, original_threshold
+            )
         elif self._stop_reason is None:
             # Loop never entered (cap=0) or exited with no prior pruning.
             self._stop_reason = (
@@ -671,6 +669,19 @@ class AlignmentPruner:
         score_dict["after_real"] = per_row_chi2
         self.top_n = self.initial_top_n
         return alignment_array, prune_dict, score_dict
+
+    def _reported_alignment_stats(self, per_row_chi2, sums, threshold):
+        """Alignment-level Z / empirical-p / biased count for the run summary,
+        against the original (fixed) null so before and after share one
+        reference, matching _scores.tsv."""
+        from .utils import _robust_zscore
+
+        total = float(np.sum(per_row_chi2))
+        return {
+            "z": _robust_zscore(total, sums),
+            "p": self.permutation_test.calc_empirical_pvalue(total, sums)[0],
+            "biased": int(np.sum(np.asarray(per_row_chi2) > threshold)),
+        }
 
     def _check_stopping_criteria(self, alignment_empirical_p):
         """Stop on alignment p-value: not-biased threshold (0.05) without
