@@ -134,7 +134,7 @@ class TestAlignmentPrunerWasserstein(unittest.TestCase):
 class TestScoreDictJsonSchema(unittest.TestCase):
     """v2 _score_dict.json: provenance + reshaped null + null_max_deltas."""
 
-    def test_v2_fields_present_with_delta_null(self):
+    def test_v3_fields_present_with_delta_null(self):
         pruner = AlignmentPruner(
             file="tests/data/example.nex",
             format="nexus",
@@ -150,10 +150,11 @@ class TestScoreDictJsonSchema(unittest.TestCase):
         path = "tests/data/example_wasserstein_s1_pruned_score_dict.json"
         with open(path) as f:
             d = json.load(f)
-        self.assertEqual(d["schema_version"], 2)
+        self.assertEqual(d["schema_version"], 3)
         self.assertIn("witchi_version", d)
         self.assertEqual(d["algorithm"], "wasserstein")
         self.assertIsNotNone(d["stop_reason"])
+        self.assertIsInstance(d["null_recomputes"], int)
         self.assertEqual(len(d["taxa"]), len(d["before_real"]))
         bp = np.array(d["before_permuted"])
         self.assertEqual(bp.shape, (30, len(d["taxa"])))

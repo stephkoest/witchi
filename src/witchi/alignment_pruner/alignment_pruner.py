@@ -36,6 +36,7 @@ class AlignmentPruner:
         top_n=10,
         pruning_algorithm="wasserstein",
         delta_null=True,
+        null_recompute_budget=1,
     ):
         self.file = file
         self.format = format
@@ -46,10 +47,13 @@ class AlignmentPruner:
         self.top_n = top_n
         self.pruning_algorithm = pruning_algorithm
         self.delta_null = delta_null
+        self.null_recompute_budget = null_recompute_budget
         self.chi_square_calculator = None
         self.alignment_size = None
         self.initial_top_n = self.top_n
         self._null_max_deltas = None
+        self._null_recompute_count = 0
+        self._last_recompute_ncols = None
         self._biased_taxa_threshold = None
         self._stop_reason = None
         self._before_stats = None
@@ -79,37 +83,14 @@ class AlignmentPruner:
         self.permutation_test = PermutationTest(
             self.num_workers_permute, self.permutations
         )
-        (
-            sums,
-            maxes,
-            upper_box_threshold,
-            upper_threshold,
-            permutated_per_row_chi2,
-        ) = self.permutation_test.compute_null(
-            alignment_array,
-            self.chi_square_calculator,
-        )
+        sums, permutated_per_row_chi2 = self._compute_null_state(alignment_array)
 
-        # Precompute Z-score parameters from pooled null (consistent with _robust_zscore)
-        self._null_z_mean = float(np.mean(permutated_per_row_chi2))
-        _median = float(np.median(permutated_per_row_chi2))
-        _mad = float(np.median(np.abs(permutated_per_row_chi2 - _median)))
-        self._null_z_scale = _mad / 0.6745
-
-        # Compress null Z-scores to quantiles for Wasserstein pruning.
-        null_z = (permutated_per_row_chi2 - self._null_z_mean) / self._null_z_scale
-        K = min(200, len(null_z))
-        positions = np.linspace(0, 1, K + 2)[1:-1]
-        self._null_z_quantiles = np.quantile(null_z, positions)
-
-        if self.delta_null:
-            print("Computing null delta distribution for stopping criterion...")
-            self._compute_null_deltas(alignment_array)
-
+        # upper_threshold passed as a dead positional, kept only for the
+        # public recursive_prune direct-call test.
         pruned_alignment_array, prune_dict, score_dict = self.recursive_prune(
             alignment_array,
             sums,
-            upper_threshold,
+            None,
             permutated_per_row_chi2,
         )
 
@@ -154,14 +135,16 @@ class AlignmentPruner:
             self.permutations, -1
         )
         score_dict_out = {
-            "schema_version": 2,
+            "schema_version": 3,
             "witchi_version": version_banner().replace("witchi ", ""),
             "algorithm": self.pruning_algorithm,
             "stop_reason": self._stop_reason,
+            "null_recomputes": self._null_recompute_count,
             "taxa": [record.id for record in alignment],
             "before_real": score_dict["before_real"],
             "after_real": score_dict["after_real"],
             "before_permuted": before_permuted_2d,
+            # null_max_deltas is the operative (last) null
             "null_max_deltas": self._null_max_deltas,
         }
         output_json_file = os.path.splitext(self.file)[0] + suffix.replace(
@@ -186,7 +169,8 @@ class AlignmentPruner:
             f"Z {before['z']:.2f} → {after['z']:.2f} | "
             f"p {before['p']:.2f} → {after['p']:.2f} | "
             f"biased {before['biased']}/{n_taxa} → {after['biased']}/{n_taxa} | "
-            f"stop: {self._stop_reason}"
+            f"stop: {self._stop_reason} | "
+            f"null recomputes: {self._null_recompute_count}"
         )
         print(f"Pruned alignment saved to {output_alignment_pruned_file}")
         print(f"Columns pruned in order saved to: {output_tsv_file}")
@@ -259,6 +243,60 @@ class AlignmentPruner:
             )
         )
         return wasserstein, chi2_differences
+
+    def _compute_null_state(self, alignment_array):
+        """Compute/refresh the full permutation-null state from the given
+        alignment; returns (sums, permutated_per_row_chi2). Shared by the
+        initial null and the one-shot recompute on the pruned alignment."""
+        (
+            sums,
+            _maxes,
+            _upper_box_threshold,
+            _upper_threshold,
+            permutated_per_row_chi2,
+        ) = self.permutation_test.compute_null(
+            alignment_array, self.chi_square_calculator
+        )
+        self._null_z_mean = float(np.mean(permutated_per_row_chi2))
+        _median = float(np.median(permutated_per_row_chi2))
+        _mad = float(np.median(np.abs(permutated_per_row_chi2 - _median)))
+        self._null_z_scale = _mad / 0.6745
+        null_z = (permutated_per_row_chi2 - self._null_z_mean) / self._null_z_scale
+        K = min(200, len(null_z))
+        positions = np.linspace(0, 1, K + 2)[1:-1]
+        self._null_z_quantiles = np.quantile(null_z, positions)
+        self._biased_taxa_threshold = self._compute_biased_taxa_threshold(
+            permutated_per_row_chi2, alignment_array.shape[0]
+        )
+        if self.delta_null:
+            print("Computing null delta distribution for stopping criterion...")
+            self._compute_null_deltas(alignment_array)
+        return sums, permutated_per_row_chi2
+
+    def _recompute_due(self, alignment_array, iteration):
+        """One-shot null recompute fires once a stop is reached, while the
+        budget allows and the alignment changed since the last recompute."""
+        if iteration <= 0:
+            return False
+        if (
+            self.null_recompute_budget is not None
+            and self._null_recompute_count >= self.null_recompute_budget
+        ):
+            return False
+        return alignment_array.shape[1] != self._last_recompute_ncols
+
+    def _recompute_null(self, alignment_array):
+        """Refresh the null on the pruned alignment; returns (sums, pooled).
+
+        Reuses the per-index seeds: on the pruned alignment they yield a
+        fresh, deterministic null."""
+        self._null_recompute_count += 1
+        self._last_recompute_ncols = alignment_array.shape[1]
+        print(
+            f"Null recompute #{self._null_recompute_count} on pruned alignment "
+            f"({alignment_array.shape[1]} columns); resuming pruning."
+        )
+        return self._compute_null_state(alignment_array)
 
     def _compute_null_deltas(self, alignment_array):
         """Compute null distribution of max per-column delta scores.
@@ -365,6 +403,8 @@ class AlignmentPruner:
         # after the first rollback so we don't rollback a second time.
         original_alignment_array = alignment_array
         in_touchdown = False
+        self._null_recompute_count = 0
+        self._last_recompute_ncols = None
 
         # Across-iteration caches for the inner chi^2 path: encoded
         # alignment (int8 codepoints) and un-fudged char counts. Both are
@@ -427,42 +467,47 @@ class AlignmentPruner:
                 f"Alignment p-value: {alignment_empirical_p:.2f}"
             )
 
-            # Reactive touchdown rollback: undo the most recent batch
-            # and continue with a 10x smaller top_n. Bounds the overshoot
-            # from either signal (alignment-level stop OR delta-null
-            # partial batch) and gives the adaptive walk room to engage
-            # in the final small batches. Fires at most once per run.
+            # On any stop: reactive touchdown rollback (once, undo the
+            # overshoot batch and 10x-shrink top_n) and a one-shot null
+            # recompute on the resulting alignment, then resume. Falls
+            # through to the final stop only once both budgets are spent.
             target_top_n = max(1, self.initial_top_n // 10)
-            if (
-                should_stop
-                and not in_touchdown
-                and self.top_n > target_top_n
-                and len(top_n_indices) > 0
-            ):
-                alignment_array, original_indices, n_recent = (
-                    self._do_touchdown_rollback(
-                        top_n_indices,
-                        prune_dict,
-                        original_alignment_array,
-                        target_top_n,
-                        char_set,
-                        n_chars,
-                    )
-                )
-                removed_columns_count -= n_recent
-                in_touchdown = True
-                top_n_indices = []
-
-                print(
-                    f"Touchdown: alignment-level overshoot "
-                    f"(reason='{stop_reason}', "
-                    f"alignment_p={alignment_empirical_p:.3f}). "
-                    f"Rolled back {n_recent} columns, reduced top_n to "
-                    f"{target_top_n}, resuming pruning."
-                )
-                continue
-
             if should_stop:
+                rolled = False
+                if (
+                    not in_touchdown
+                    and self.top_n > target_top_n
+                    and len(top_n_indices) > 0
+                ):
+                    alignment_array, original_indices, n_recent = (
+                        self._do_touchdown_rollback(
+                            top_n_indices,
+                            prune_dict,
+                            original_alignment_array,
+                            target_top_n,
+                            char_set,
+                            n_chars,
+                        )
+                    )
+                    removed_columns_count -= n_recent
+                    in_touchdown = True
+                    top_n_indices = []
+                    rolled = True
+                    print(
+                        f"Touchdown: alignment-level overshoot "
+                        f"(reason='{stop_reason}', "
+                        f"alignment_p={alignment_empirical_p:.3f}). "
+                        f"Rolled back {n_recent} columns, reduced top_n to "
+                        f"{target_top_n}, resuming pruning."
+                    )
+                if self._recompute_due(alignment_array, iteration):
+                    sums, permutated_per_row_chi2 = self._recompute_null(
+                        alignment_array
+                    )
+                    top_n_indices = []
+                    continue
+                if rolled:
+                    continue
                 self._stop_reason = stop_reason
                 self._after_stats = {
                     "z": alignment_z,
@@ -502,6 +547,12 @@ class AlignmentPruner:
                     null_pvals_for_batch[col] = float(last_p)
 
                 if not justified:
+                    if self._recompute_due(alignment_array, iteration):
+                        sums, permutated_per_row_chi2 = self._recompute_null(
+                            alignment_array
+                        )
+                        top_n_indices = []
+                        continue
                     max_delta = sorted_candidates[0][1]
                     self._stop_reason = (
                         f"delta not significant (p={last_p:.3f}, "
@@ -516,11 +567,10 @@ class AlignmentPruner:
 
                 if len(justified) < len(sorted_candidates):
                     fail_delta = sorted_candidates[len(justified)][1]
-                    # Harmonised touchdown: a partial batch means the
-                    # current top_n was too aggressive. If the touchdown
-                    # budget is unspent and a previous batch exists, roll
-                    # it back and resume with reduced top_n (same
-                    # mechanism as the alignment-level overshoot path).
+                    # Partial batch (delta-null equivalent of a stop): roll
+                    # back the overshoot (once) and recompute the null (once)
+                    # before resuming; otherwise take the partial batch.
+                    rolled = False
                     if (
                         not in_touchdown
                         and self.top_n > target_top_n
@@ -539,6 +589,7 @@ class AlignmentPruner:
                         removed_columns_count -= n_recent
                         in_touchdown = True
                         top_n_indices = []
+                        rolled = True
                         print(
                             f"Touchdown: delta-null partial batch "
                             f"(rank {len(justified) + 1} fails at "
@@ -546,6 +597,13 @@ class AlignmentPruner:
                             f"Rolled back {n_recent} columns, reduced "
                             f"top_n to {target_top_n}, resuming pruning."
                         )
+                    if self._recompute_due(alignment_array, iteration):
+                        sums, permutated_per_row_chi2 = self._recompute_null(
+                            alignment_array
+                        )
+                        top_n_indices = []
+                        continue
+                    if rolled:
                         continue
                     print(
                         f"  Partial batch: removing {len(justified)}/"
