@@ -615,8 +615,11 @@ class AlignmentPruner:
         return alignment_array, prune_dict, score_dict
 
     def _check_stopping_criteria(self, alignment_empirical_p):
-        """Stop pruning when the alignment-level empirical p-value exceeds 0.05."""
-        if alignment_empirical_p > 0.05:
+        """Stop on alignment p-value: not-biased threshold (0.05) without
+        delta-null; over-prune floor (0.95) with it, where the per-column
+        walk supplies the evidence to prune past not-biased."""
+        threshold = 0.95 if self.delta_null else 0.05
+        if alignment_empirical_p > threshold:
             return True, "alignment p-value"
         return False, None
 
