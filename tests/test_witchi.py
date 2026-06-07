@@ -53,6 +53,40 @@ class TestAlignmentPruner(unittest.TestCase):
         assert len(result) == 3
         assert "after_real" in result[2]
 
+    def test_pruning_does_not_overshoot_cap(self):
+        """Pruning must not remove more columns than --max_residue_pruned."""
+        from witchi.alignment_pruner.alignment_reader import AlignmentReader
+        from witchi.alignment_pruner.sequence_type_detector import SequenceTypeDetector
+        from witchi.alignment_pruner.chi_square_calculator import ChiSquareCalculator
+
+        cap = 50
+        # cap is a multiple of top_n and binds before the alignment-level stop
+        pruner = AlignmentPruner(
+            file="tests/data/example.nex",
+            format="nexus",
+            max_residue_pruned=cap,
+            permutations=50,
+            num_workers_chisq=1,
+            num_workers_permute=1,
+            top_n=10,
+            pruning_algorithm="quartic",
+            delta_null=False,
+        )
+        reader = AlignmentReader(pruner.file, pruner.format)
+        alignment, alignment_array = reader.run()
+        _, char_set = SequenceTypeDetector.detect(alignment)
+        pruner.chi_square_calculator = ChiSquareCalculator(char_set, 1)
+        pruner.permutation_test = PermutationTest(1, pruner.permutations)
+        sums, _, _, _, perm_chi2 = pruner.permutation_test.run(
+            alignment_array, pruner.chi_square_calculator
+        )
+
+        _, prune_dict, _ = pruner.recursive_prune(
+            alignment_array, sums, 99.0, perm_chi2
+        )
+
+        self.assertLessEqual(len(prune_dict), cap)
+
     def test_invalid_algorithm_raises(self):
         self.pruner.pruning_algorithm = "invalid"
         with self.assertRaises(ValueError):

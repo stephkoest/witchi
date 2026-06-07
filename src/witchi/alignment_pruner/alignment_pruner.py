@@ -421,7 +421,7 @@ class AlignmentPruner:
         self._alignment_int = _encode_alignment_int(alignment_array, char_set)
         self._count_rows_raw = _count_rows_from_int(self._alignment_int, n_chars)
 
-        while removed_columns_count < self.max_residue_pruned:
+        while removed_columns_count + len(top_n_indices) < self.max_residue_pruned:
             stats = self._calculate_per_row_stats(alignment_array)
             count_rows_array = stats["count_rows"]
             expected_observed = stats["expected_observed"]
