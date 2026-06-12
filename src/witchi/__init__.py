@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-__version__ = "0.2.0rc1"
+__version__ = "0.2.0"
 
 
 def _git_sha():
