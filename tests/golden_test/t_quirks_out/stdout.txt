@@ -1,0 +1,16 @@
+witchi 0.2.0
+⚠️  Sequence contains unexpected characters: ['*', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'Z']
+Defaulting to amino acid interpretation.
+Running 25 permutations.
+Using 1 worker(s) for permutation
+Alignment chi2score: 510.51 | Permutations alignment chi2scores: 303.63 - 380.48 | Empirical-P: 0.0
+Alignment mean taxa chi2score: 17.02 | Permutations mean taxa chi2score: 11.58 | Alignment Z-score: 10.79
+Biased Taxa based on corrected empirical-P-values: 2 of 30
+Printing taxa p-values and z-scores to file: gtdb_quirks_scores.tsv
+Top 5 taxa z-scores and corresponding empirical p-values:
+G002495185	7.97	0.0000
+G002496015	5.38	0.0000
+G002495905	3.80	0.2000
+G002494645	2.99	0.2400
+G002495645	2.62	0.4000
+Execution time for testing: 0.13 seconds

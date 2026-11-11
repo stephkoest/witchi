@@ -244,6 +244,15 @@ Port literally, keeping every quirk:
   and stdout (minus timing) are byte-identical to Python. The reference run lives in
   `tests/golden_full/` (not committed).
 
+## 5i. Phase 8 status (done)
+
+- `src/testcmd.rs`: `witchi test` (permutation null, per-taxon empirical p / robust Z,
+  report, `--create_output` scores TSV). The output name follows Python's
+  `str.replace(".ext", "_scores.tsv")`, which replaces every occurrence. A file without an
+  extension is a clean error; Python would overwrite the input with the scores table.
+- `tests/cases_test.tsv` + `scripts/make_golden.sh --test`: 9 cases. Stdout (the main
+  output of `test`) and the scores TSVs are byte-identical.
+
 ## 6. Decisions (agreed 2026-11-12)
 
 - **BLAS**: both backends. The OpenBLAS FFI backend is the default and gives exact parity.

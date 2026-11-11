@@ -1,0 +1,15 @@
+witchi 0.2.0
+Detected DNA sequence.
+Running 10 permutations.
+Using 1 worker(s) for permutation
+Alignment chi2score: 48.91 | Permutations alignment chi2scores: 1.59 - 7.42 | Empirical-P: 0.0
+Alignment mean taxa chi2score: 9.78 | Permutations mean taxa chi2score: 0.72 | Alignment Z-score: 41.95
+Biased Taxa based on corrected empirical-P-values: 5 of 5
+Printing taxa p-values and z-scores to file: example_scores.tsv
+Top 5 taxa z-scores and corresponding empirical p-values:
+Bacillus	21.96	0.0000
+Deinococcus	21.73	0.0000
+Aquifex	13.28	0.0000
+Thermotoga	8.73	0.0000
+Thermus	6.65	0.0000
+Execution time for testing: 0.11 seconds

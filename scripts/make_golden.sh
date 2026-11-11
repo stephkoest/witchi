@@ -2,9 +2,10 @@
 # Regenerate golden reference outputs by running the Python WitChi reference.
 #
 # Usage:
-#   scripts/make_golden.sh [--large] [CASE_NAME_REGEX]
+#   scripts/make_golden.sh [--large | --test] [CASE_NAME_REGEX]
 #
 # Small tier: manifest tests/cases.tsv, inputs tests/data/, refs tests/golden/<case>/
+# Test tier:  manifest tests/cases_test.tsv (runs `witchi test`), refs tests/golden_test/<case>/
 # Large tier: manifest tests/cases_large.tsv, inputs tests/golden_large/data/,
 #             refs tests/golden_large/<case>/ (not committed)
 #
@@ -16,13 +17,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="${WITCHI_CONDA_ENV:-witchi-0.2.0}"
 
 TIER=small
+SUBCOMMAND=prune
 if [[ "${1:-}" == "--large" ]]; then TIER=large; shift; fi
+if [[ "${1:-}" == "--test" ]]; then TIER=test; SUBCOMMAND=test; shift; fi
 FILTER="${1:-.}"
 
 if [[ $TIER == small ]]; then
     MANIFEST="$ROOT/tests/cases.tsv"
     DATA="$ROOT/tests/data"
     OUT="$ROOT/tests/golden"
+elif [[ $TIER == test ]]; then
+    MANIFEST="$ROOT/tests/cases_test.tsv"
+    DATA="$ROOT/tests/data"
+    OUT="$ROOT/tests/golden_test"
 else
     MANIFEST="$ROOT/tests/cases_large.tsv"
     DATA="$ROOT/tests/golden_large/data"
@@ -53,10 +60,10 @@ while IFS=$'\t' read -r name input args || [[ -n "${name:-}" ]]; do
     case_dir="$WORK/$name"
     mkdir -p "$case_dir"
     cp "$DATA/$input" "$case_dir/"
-    echo "== $name: witchi prune --file $input $args"
+    echo "== $name: witchi $SUBCOMMAND --file $input $args"
     start=$(date +%s.%N)
     # shellcheck disable=SC2086
-    (cd "$case_dir" && witchi prune --file "$input" $args > stdout.txt 2>&1) || {
+    (cd "$case_dir" && witchi "$SUBCOMMAND" --file "$input" $args > stdout.txt 2>&1) || {
         echo "   FAILED (see output below)" >&2
         cat "$case_dir/stdout.txt" >&2
         exit 1
@@ -65,7 +72,7 @@ while IFS=$'\t' read -r name input args || [[ -n "${name:-}" ]]; do
     rm "$case_dir/$input"
     rm -rf "${OUT:?}/$name"
     mv "$case_dir" "$OUT/$name"
-    printf '   %.1fs  %s\n' "$(echo "$end - $start" | bc)" "$(grep -o '"stop_reason": "[^"]*"' "$OUT/$name"/*_score_dict.json | cut -d'"' -f4)"
+    printf '   %.1fs  %s\n' "$(echo "$end - $start" | bc)" "$(cat "$OUT/$name"/*_score_dict.json 2>/dev/null | grep -o '"stop_reason": "[^"]*"' | cut -d'"' -f4)"
     n=$((n + 1))
 done < "$MANIFEST"
 echo "Generated $n reference case(s) in $OUT"

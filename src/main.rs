@@ -3,7 +3,7 @@
 //! The command-line interface mirrors the Python `argparse` definition in
 //! `witchi/witchi.py`, including its underscore-style flag names.
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 
 
@@ -98,6 +98,10 @@ struct TestArgs {
     /// Flag to create output file with scores.
     #[arg(long = "create_output")]
     create_output: bool,
+
+    /// Rust port only: number of worker threads (default: --num_workers_permute).
+    #[arg(long, default_value_t = 0)]
+    threads: usize,
 }
 
 impl PruneArgs {
@@ -147,6 +151,13 @@ fn main() -> Result<()> {
             };
             witchi::pruner::run(&opts)
         }
-        Command::Test(args) => bail!("test is not implemented yet (args: {args:?})"),
+        Command::Test(args) => witchi::testcmd::run(&witchi::testcmd::TestOptions {
+            file: args.file,
+            format: args.format,
+            num_workers_permute: args.num_workers_permute,
+            permutations: args.permutations,
+            create_output: args.create_output,
+            threads: args.threads,
+        }),
     }
 }

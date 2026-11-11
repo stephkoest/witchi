@@ -15,6 +15,7 @@ pub mod permutation;
 pub mod pruner;
 pub mod pyfmt;
 pub mod rng;
+pub mod testcmd;
 
 /// Version reported in output files (`witchi_version` in the score JSON).
 pub const WITCHI_VERSION: &str = "0.2.0";
