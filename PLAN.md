@@ -51,6 +51,7 @@ Each hazard below was checked against the installed environment unless noted oth
 | H12 | Sort order: `sorted(..., key=delta, reverse=True)` is **stable**, so ties keep the lower column index first; `max(deltas.values())` | Stable sort by descending delta; the same `>` scan for max | – |
 | H13 | `prune_dict` is an insertion-ordered dict; rollback deletes the last n inserted keys | `indexmap::IndexMap` + `shift_remove` | – |
 | H14 | `np.char.upper` and the `cp & 0xFF` codepoint LUT in `_encode_alignment_int` alias non-ASCII chars (e.g. U+0141 behaves like 'A') | Read as bytes and reject non-ASCII with an error | Decided (§6) |
+| H16 | **numpy memory order + temporary elision** (found in phase 5). `np.delete` of ≥ 2 columns returns an F-ordered `_alignment_int` (1 column keeps the order, rollback re-encodes C). In `_per_row_chi2_block`, `S = A + tmp` elides the F-ordered temporary when it is ≥ 256 KiB (T·b·8), so the per-row block becomes F-ordered and `sum(axis=0)` turns **pairwise per column** instead of sequential (squared and quartic; wasserstein is unaffected) | `Encoded.fortran` tracks Python's order; `delta::per_row_block_is_fortran` applies the elision rule | Verified: large tier + `n150_*` cases fail without it |
 | H15 | Python's chunking with `--num_workers_chisq` > 1 (when T·L ≥ 5e6) changes the **block boundaries**, which changes BLAS edge tiles and b==1 blocks. Output can therefore depend on the worker count. | Reproduce `np.linspace(0, L, n_chunks+1, dtype=int)` chunk bounds and the per-chunk block loop exactly. Parallelise *across* chunks/blocks without changing their boundaries. | Must test with a large subset |
 
 Python itself is only reproducible on the same CPU family and the same OpenBLAS kernel
@@ -203,6 +204,20 @@ Port literally, keeping every quirk:
   are bit-identical for the 15 cases with OpenBLAS. The pure-Rust backend differs only on
   width-1 blocks (dgemv): 1 column each in `c257_sq` / `c257_qu`. OpenBLAS's dgemv
   accumulation order did not match any simple FMA grouping, so it is not emulated.
+
+## 5f. Phase 5 status (done)
+
+- `src/pruner.rs`: literal port of `run` / `recursive_prune`, including:
+  - lazy `original_indices` and the prune_dict rows written one iteration late
+  - insertion-ordered rollback, the one-shot null recompute and the cap block
+  - stop-reason strings verbatim
+- `src/output.rs`: the four files, plus `os.path.splitext` semantics. Duplicate taxon ids
+  collapse in `_scores.tsv` exactly as Python's dict does.
+- Golden: **33/33 small + 3/3 large cases byte-identical**.
+- Found and fixed H16 (numpy temporary elision + F order, see §2). Added the
+  `gtdb_n150_c600` cases, which fail without that logic.
+- `--max_residue_pruned < 1`, `--top_n 0`, `--permutations 0` and an unknown algorithm
+  are clean errors. Python crashes or hangs on these.
 
 ## 6. Decisions (agreed 2026-11-12)
 

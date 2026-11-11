@@ -36,3 +36,7 @@ deg_qu_t1_nodn	dna_degenerate.fasta	--pruning_algorithm quartic --top_n 1 --perm
 deg_wa_t2	dna_degenerate.fasta	--pruning_algorithm wasserstein --top_n 2 --permutations 20 --max_residue_pruned 60
 nex_sq_t1	example.nex	--format nexus --pruning_algorithm squared --top_n 1 --permutations 20 --max_residue_pruned 300
 nex_wa_t10	example.nex	--format nexus --pruning_algorithm wasserstein --top_n 10 --permutations 20 --max_residue_pruned 300
+n150_sq_t5	gtdb_n150_c600.faa	--pruning_algorithm squared --top_n 5 --permutations 30 --max_residue_pruned 600
+n150_qu_t20	gtdb_n150_c600.faa	--pruning_algorithm quartic --top_n 20 --permutations 30 --max_residue_pruned 600
+n150_qu_t3_nodn	gtdb_n150_c600.faa	--pruning_algorithm quartic --top_n 3 --permutations 30 --max_residue_pruned 600 --no-delta-null
+n150_wa_t8	gtdb_n150_c600.faa	--pruning_algorithm wasserstein --top_n 8 --permutations 30 --max_residue_pruned 600

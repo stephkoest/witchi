@@ -1,0 +1,89 @@
+witchi 0.2.0
+Starting pruning workflow
+Chi² calculator using 1 worker(s)
+Permutation test using 1 worker(s)
+Pruning algorithm: quartic
+Initial top_n: 3
+Detected amino acid sequence.
+Running 30 permutations.
+Using 1 worker(s) for permutation
+Columns removed: 0, 0.00% | Biased taxa permutation: 32 | Alignment Z-score: 54.13 | Alignment p-value: 0.00
+Columns removed: 3, 0.50% | Biased taxa permutation: 31 | Alignment Z-score: 51.91 | Alignment p-value: 0.00
+Columns removed: 6, 1.00% | Biased taxa permutation: 28 | Alignment Z-score: 50.17 | Alignment p-value: 0.00
+Columns removed: 9, 1.50% | Biased taxa permutation: 26 | Alignment Z-score: 48.63 | Alignment p-value: 0.00
+Columns removed: 12, 2.00% | Biased taxa permutation: 26 | Alignment Z-score: 47.11 | Alignment p-value: 0.00
+Columns removed: 15, 2.50% | Biased taxa permutation: 25 | Alignment Z-score: 45.77 | Alignment p-value: 0.00
+Columns removed: 18, 3.00% | Biased taxa permutation: 23 | Alignment Z-score: 44.36 | Alignment p-value: 0.00
+Columns removed: 21, 3.50% | Biased taxa permutation: 23 | Alignment Z-score: 42.85 | Alignment p-value: 0.00
+Columns removed: 24, 4.00% | Biased taxa permutation: 21 | Alignment Z-score: 41.45 | Alignment p-value: 0.00
+Columns removed: 27, 4.50% | Biased taxa permutation: 20 | Alignment Z-score: 40.01 | Alignment p-value: 0.00
+Columns removed: 30, 5.00% | Biased taxa permutation: 21 | Alignment Z-score: 38.39 | Alignment p-value: 0.00
+Columns removed: 33, 5.50% | Biased taxa permutation: 21 | Alignment Z-score: 37.10 | Alignment p-value: 0.00
+Columns removed: 36, 6.00% | Biased taxa permutation: 20 | Alignment Z-score: 36.02 | Alignment p-value: 0.00
+Columns removed: 39, 6.50% | Biased taxa permutation: 20 | Alignment Z-score: 34.80 | Alignment p-value: 0.00
+Columns removed: 42, 7.00% | Biased taxa permutation: 20 | Alignment Z-score: 33.63 | Alignment p-value: 0.00
+Columns removed: 45, 7.50% | Biased taxa permutation: 20 | Alignment Z-score: 32.30 | Alignment p-value: 0.00
+Columns removed: 48, 8.00% | Biased taxa permutation: 18 | Alignment Z-score: 30.97 | Alignment p-value: 0.00
+Columns removed: 51, 8.50% | Biased taxa permutation: 19 | Alignment Z-score: 30.10 | Alignment p-value: 0.00
+Columns removed: 54, 9.00% | Biased taxa permutation: 17 | Alignment Z-score: 29.16 | Alignment p-value: 0.00
+Columns removed: 57, 9.50% | Biased taxa permutation: 15 | Alignment Z-score: 28.28 | Alignment p-value: 0.00
+Columns removed: 60, 10.00% | Biased taxa permutation: 15 | Alignment Z-score: 26.95 | Alignment p-value: 0.00
+Columns removed: 63, 10.50% | Biased taxa permutation: 15 | Alignment Z-score: 25.92 | Alignment p-value: 0.00
+Columns removed: 66, 11.00% | Biased taxa permutation: 15 | Alignment Z-score: 24.69 | Alignment p-value: 0.00
+Columns removed: 69, 11.50% | Biased taxa permutation: 16 | Alignment Z-score: 23.79 | Alignment p-value: 0.00
+Columns removed: 72, 12.00% | Biased taxa permutation: 16 | Alignment Z-score: 22.81 | Alignment p-value: 0.00
+Columns removed: 75, 12.50% | Biased taxa permutation: 13 | Alignment Z-score: 21.72 | Alignment p-value: 0.00
+Columns removed: 78, 13.00% | Biased taxa permutation: 12 | Alignment Z-score: 20.78 | Alignment p-value: 0.00
+Columns removed: 81, 13.50% | Biased taxa permutation: 12 | Alignment Z-score: 19.64 | Alignment p-value: 0.00
+Columns removed: 84, 14.00% | Biased taxa permutation: 12 | Alignment Z-score: 18.46 | Alignment p-value: 0.00
+Columns removed: 87, 14.50% | Biased taxa permutation: 12 | Alignment Z-score: 17.64 | Alignment p-value: 0.00
+Columns removed: 90, 15.00% | Biased taxa permutation: 12 | Alignment Z-score: 16.88 | Alignment p-value: 0.00
+Columns removed: 93, 15.50% | Biased taxa permutation: 12 | Alignment Z-score: 15.85 | Alignment p-value: 0.00
+Columns removed: 96, 16.00% | Biased taxa permutation: 11 | Alignment Z-score: 14.91 | Alignment p-value: 0.00
+Columns removed: 99, 16.50% | Biased taxa permutation: 12 | Alignment Z-score: 14.03 | Alignment p-value: 0.00
+Columns removed: 102, 17.00% | Biased taxa permutation: 12 | Alignment Z-score: 13.27 | Alignment p-value: 0.00
+Columns removed: 105, 17.50% | Biased taxa permutation: 10 | Alignment Z-score: 12.14 | Alignment p-value: 0.00
+Columns removed: 108, 18.00% | Biased taxa permutation: 10 | Alignment Z-score: 11.35 | Alignment p-value: 0.00
+Columns removed: 111, 18.50% | Biased taxa permutation: 10 | Alignment Z-score: 10.42 | Alignment p-value: 0.00
+Columns removed: 114, 19.00% | Biased taxa permutation: 10 | Alignment Z-score: 9.41 | Alignment p-value: 0.00
+Columns removed: 117, 19.50% | Biased taxa permutation: 10 | Alignment Z-score: 8.73 | Alignment p-value: 0.00
+Columns removed: 120, 20.00% | Biased taxa permutation: 9 | Alignment Z-score: 7.91 | Alignment p-value: 0.00
+Columns removed: 123, 20.50% | Biased taxa permutation: 9 | Alignment Z-score: 7.13 | Alignment p-value: 0.00
+Columns removed: 126, 21.00% | Biased taxa permutation: 8 | Alignment Z-score: 6.58 | Alignment p-value: 0.00
+Columns removed: 129, 21.50% | Biased taxa permutation: 8 | Alignment Z-score: 5.78 | Alignment p-value: 0.00
+Columns removed: 132, 22.00% | Biased taxa permutation: 7 | Alignment Z-score: 5.07 | Alignment p-value: 0.00
+Columns removed: 135, 22.50% | Biased taxa permutation: 7 | Alignment Z-score: 4.42 | Alignment p-value: 0.00
+Columns removed: 138, 23.00% | Biased taxa permutation: 7 | Alignment Z-score: 3.63 | Alignment p-value: 0.00
+Columns removed: 141, 23.50% | Biased taxa permutation: 7 | Alignment Z-score: 2.71 | Alignment p-value: 0.03
+Columns removed: 144, 24.00% | Biased taxa permutation: 7 | Alignment Z-score: 1.95 | Alignment p-value: 0.07
+Touchdown: alignment-level overshoot (reason='alignment p-value', alignment_p=0.067). Rolled back 3 columns, reduced top_n to 1, resuming pruning.
+Null recompute #1 on pruned alignment (459 columns); resuming pruning.
+Running 30 permutations.
+Using 1 worker(s) for permutation
+Columns removed: 141, 23.50% | Biased taxa permutation: 9 | Alignment Z-score: 3.36 | Alignment p-value: 0.00
+Columns removed: 142, 23.67% | Biased taxa permutation: 8 | Alignment Z-score: 3.24 | Alignment p-value: 0.00
+Columns removed: 143, 23.83% | Biased taxa permutation: 8 | Alignment Z-score: 3.14 | Alignment p-value: 0.00
+Columns removed: 144, 24.00% | Biased taxa permutation: 8 | Alignment Z-score: 3.04 | Alignment p-value: 0.00
+Columns removed: 145, 24.17% | Biased taxa permutation: 8 | Alignment Z-score: 2.94 | Alignment p-value: 0.00
+Columns removed: 146, 24.33% | Biased taxa permutation: 7 | Alignment Z-score: 2.79 | Alignment p-value: 0.00
+Columns removed: 147, 24.50% | Biased taxa permutation: 7 | Alignment Z-score: 2.65 | Alignment p-value: 0.00
+Columns removed: 148, 24.67% | Biased taxa permutation: 7 | Alignment Z-score: 2.56 | Alignment p-value: 0.00
+Columns removed: 149, 24.83% | Biased taxa permutation: 7 | Alignment Z-score: 2.45 | Alignment p-value: 0.00
+Columns removed: 150, 25.00% | Biased taxa permutation: 7 | Alignment Z-score: 2.38 | Alignment p-value: 0.00
+Columns removed: 151, 25.17% | Biased taxa permutation: 7 | Alignment Z-score: 2.27 | Alignment p-value: 0.00
+Columns removed: 152, 25.33% | Biased taxa permutation: 7 | Alignment Z-score: 2.18 | Alignment p-value: 0.00
+Columns removed: 153, 25.50% | Biased taxa permutation: 7 | Alignment Z-score: 2.07 | Alignment p-value: 0.00
+Columns removed: 154, 25.67% | Biased taxa permutation: 7 | Alignment Z-score: 1.95 | Alignment p-value: 0.00
+Columns removed: 155, 25.83% | Biased taxa permutation: 6 | Alignment Z-score: 1.83 | Alignment p-value: 0.00
+Columns removed: 156, 26.00% | Biased taxa permutation: 6 | Alignment Z-score: 1.74 | Alignment p-value: 0.00
+Columns removed: 157, 26.17% | Biased taxa permutation: 6 | Alignment Z-score: 1.61 | Alignment p-value: 0.00
+Columns removed: 158, 26.33% | Biased taxa permutation: 6 | Alignment Z-score: 1.50 | Alignment p-value: 0.00
+Columns removed: 159, 26.50% | Biased taxa permutation: 6 | Alignment Z-score: 1.39 | Alignment p-value: 0.03
+Columns removed: 160, 26.67% | Biased taxa permutation: 6 | Alignment Z-score: 1.26 | Alignment p-value: 0.03
+Columns removed: 161, 26.83% | Biased taxa permutation: 6 | Alignment Z-score: 1.18 | Alignment p-value: 0.07
+Pruned 600 → 439 columns (-161, 26.83%) | Z 54.13 → -1.66 | p 0.00 → 0.83 | biased 32/150 → 4/150 | stop: alignment p-value | null recomputes: 1
+Pruned alignment saved to gtdb_n150_c600_quartic_s3_pruned.fasta
+Columns pruned in order saved to: gtdb_n150_c600_quartic_s3_pruned.tsv
+Taxa before/after Z and p-values printed to gtdb_n150_c600_quartic_s3_pruned_scores.tsv
+Chiscore values from permutation testing printed to gtdb_n150_c600_quartic_s3_pruned_score_dict.json
+Execution time: 1.13 seconds

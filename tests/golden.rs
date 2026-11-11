@@ -6,8 +6,8 @@
 //! * Large tier: `tests/cases_large.tsv`, inputs and refs under `tests/golden_large/`
 //!   (not committed; generate with `scripts/make_golden.sh --large`).
 //!
-//! Both tests are `#[ignore]` until `prune` is implemented (PLAN.md phase 5):
-//!     cargo test --release --test golden -- --ignored
+//! The large tier is `#[ignore]`d (needs locally generated refs):
+//!     cargo test --release --test golden -- --ignored golden_large
 //! Set `WITCHI_GOLDEN_FILTER=<substring>` to run a subset of cases, and
 //! `WITCHI_GOLDEN_BIN=<path>` to test another binary (e.g. Python's `witchi`).
 //! `stdout.txt` in a reference dir is informational and never compared.
@@ -161,7 +161,6 @@ fn run_tier(manifest: &Path, data_dir: &Path, golden_dir: &Path, tier: &str) {
 }
 
 #[test]
-#[ignore = "enable once `prune` is implemented (PLAN.md phase 5)"]
 fn golden_small() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     run_tier(&root.join("cases.tsv"), &root.join("data"), &root.join("golden"), "small");

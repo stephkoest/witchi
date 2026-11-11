@@ -1,0 +1,33 @@
+witchi 0.2.0
+Starting pruning workflow
+Chi² calculator using 1 worker(s)
+Permutation test using 1 worker(s)
+Pruning algorithm: quartic
+Initial top_n: 20
+Detected amino acid sequence.
+Running 30 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=30): mean=403.539355, p95=465.167982
+Columns removed: 0, 0.00% | Biased taxa permutation: 32 | Alignment Z-score: 54.13 | Alignment p-value: 0.00
+Columns removed: 20, 3.33% | Biased taxa permutation: 23 | Alignment Z-score: 43.32 | Alignment p-value: 0.00
+Columns removed: 40, 6.67% | Biased taxa permutation: 20 | Alignment Z-score: 34.54 | Alignment p-value: 0.00
+Columns removed: 60, 10.00% | Biased taxa permutation: 15 | Alignment Z-score: 27.08 | Alignment p-value: 0.00
+Columns removed: 80, 13.33% | Biased taxa permutation: 12 | Alignment Z-score: 20.25 | Alignment p-value: 0.00
+Columns removed: 100, 16.67% | Biased taxa permutation: 12 | Alignment Z-score: 14.23 | Alignment p-value: 0.00
+Columns removed: 120, 20.00% | Biased taxa permutation: 9 | Alignment Z-score: 8.41 | Alignment p-value: 0.00
+Touchdown: delta-null partial batch (rank 20 fails at p=0.067, delta=466.838250). Rolled back 20 columns, reduced top_n to 2, resuming pruning.
+Null recompute #1 on pruned alignment (500 columns); resuming pruning.
+Running 30 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=30): mean=408.008354, p95=583.938492
+Columns removed: 100, 16.67% | Biased taxa permutation: 12 | Alignment Z-score: 13.02 | Alignment p-value: 0.00
+Columns removed: 102, 17.00% | Biased taxa permutation: 12 | Alignment Z-score: 12.56 | Alignment p-value: 0.00
+Columns removed: 104, 17.33% | Biased taxa permutation: 10 | Alignment Z-score: 11.98 | Alignment p-value: 0.00
+Pruned 600 → 496 columns (-104, 17.33%) | Z 54.13 → 12.85 | p 0.00 → 0.00 | biased 32/150 → 10/150 | stop: delta not significant (p=0.067, max_delta=616.817574) | null recomputes: 1
+Pruned alignment saved to gtdb_n150_c600_quartic_s20_pruned.fasta
+Columns pruned in order saved to: gtdb_n150_c600_quartic_s20_pruned.tsv
+Taxa before/after Z and p-values printed to gtdb_n150_c600_quartic_s20_pruned_scores.tsv
+Chiscore values from permutation testing printed to gtdb_n150_c600_quartic_s20_pruned_score_dict.json
+Execution time: 1.70 seconds

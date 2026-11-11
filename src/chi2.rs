@@ -8,11 +8,18 @@
 use crate::npy;
 
 /// An int-encoded alignment, column-major.
+///
+/// `fortran` tracks the memory order Python's `_alignment_int` would have:
+/// it starts C-ordered, `np.delete` of two or more columns (fancy indexing)
+/// returns an F-ordered array, deleting a single column keeps the current
+/// order, and the touchdown rollback re-encodes it C-ordered. The order is
+/// observable: see `delta::Reducer`.
 #[derive(Clone, Debug)]
 pub struct Encoded {
     pub nrows: usize,
     pub ncols: usize,
     pub codes: Vec<i8>,
+    pub fortran: bool,
 }
 
 impl Encoded {
@@ -26,15 +33,23 @@ impl Encoded {
                 codes[j * nrows + t] = lut[b as usize];
             }
         }
-        Encoded { nrows, ncols, codes }
+        Encoded { nrows, ncols, codes, fortran: false }
     }
 
     pub fn column(&self, j: usize) -> &[i8] {
         &self.codes[j * self.nrows..(j + 1) * self.nrows]
     }
 
-    /// Remove the given columns (any order; duplicates ignored).
+    /// Remove the given columns (any order; duplicates ignored), following
+    /// `np.delete(a, cols, axis=1)` for the memory order.
     pub fn delete_columns(&self, cols: &[usize]) -> Encoded {
+        let mut out = self.delete_columns_raw(cols);
+        out.fortran = if cols.len() == 1 { self.fortran } else { true };
+        out
+    }
+
+    /// Remove columns; the result is a freshly encoded (C-ordered) alignment.
+    pub fn delete_columns_raw(&self, cols: &[usize]) -> Encoded {
         let mut drop = vec![false; self.ncols];
         for &c in cols {
             drop[c] = true;
@@ -46,7 +61,7 @@ impl Encoded {
                 codes.extend_from_slice(self.column(j));
             }
         }
-        Encoded { nrows: self.nrows, ncols: keep, codes }
+        Encoded { nrows: self.nrows, ncols: keep, codes, fortran: false }
     }
 }
 
