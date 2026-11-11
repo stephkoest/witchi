@@ -224,7 +224,7 @@ Port literally, keeping every quirk:
 - Console output is identical to Python's except the `Execution time` value, for all golden
   cases. The golden harness warns (doesn't fail) on drift.
 
-## 5h. Phase 7 status
+## 5h. Phase 7 status (done)
 
 - One rayon pool per run, sized by the Rust-only `--threads` (default: max of the two
   `--num_workers_*`, so CPU use matches Python unless asked). `--num_workers_chisq` keeps
@@ -237,8 +237,12 @@ Port literally, keeping every quirk:
 - Speed (shared machine; Python's own timing in brackets):
   - 1000 × 6000 squared, 20 perms: 4.1 s on 1 thread, 0.5 s on 32 (Python 32 s)
   - wasserstein: 8.2 s / 0.8 s (Python 13 s with 8 workers)
-  - full MSA 12,944 × 13,540, wasserstein, 20 perms, cap 50: 16.6 s on 32 threads,
-    4.3 GB peak RSS (the delta-null holds one permuted copy per thread)
+  - full MSA 12,944 × 13,540, wasserstein, top_n 10, 20 perms, cap 50,
+    `--num_workers_permute 16 --num_workers_chisq 4`: **16.5 s** on 32 threads vs Python
+    **412 s**, peak RSS 4.3 GB vs 4.5 GB
+- **Full-MSA parity**: all four output files (177 MB FASTA, trace TSV, scores TSV, 9 MB JSON)
+  and stdout (minus timing) are byte-identical to Python. The reference run lives in
+  `tests/golden_full/` (not committed).
 
 ## 6. Decisions (agreed 2026-11-12)
 
