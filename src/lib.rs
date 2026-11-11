@@ -7,6 +7,7 @@ pub mod alignment;
 pub mod fasta;
 pub mod nexus;
 pub mod pyfmt;
+pub mod rng;
 
 /// Version reported in output files (`witchi_version` in the score JSON).
 pub const WITCHI_VERSION: &str = "0.2.0";
