@@ -4,7 +4,9 @@
 //! PLAN.md for the numerical hazards and how each module addresses them.
 
 pub mod alignment;
+pub mod blas;
 pub mod chi2;
+pub mod delta;
 pub mod fasta;
 pub mod nexus;
 pub mod npy;

@@ -187,6 +187,23 @@ Port literally, keeping every quirk:
   internals for 15 cases. `tests/intermediates.rs` matches every null-state array bit
   for bit.
 
+## 5e. Phase 4 status (done)
+
+- `src/blas.rs`: numpy 2.4.6's matmul dispatch for `U.T @ inv_gf`:
+  - dgemm(RowMajor, Trans, NoTrans) for T > 1, b > 1
+  - dgemv(RowMajor, Trans) when T == 1 or b == 1
+  - `0 + ddot` when both are 1
+  `build.rs` links the conda env's `libcblas.so` (the same file numpy loads, a symlink to
+  OpenBLAS 0.3.34) with an rpath; `OPENBLAS_LIB_DIR` / `OPENBLAS_LIB_NAME` override it.
+  `--no-default-features` gives the pure-Rust FMA-chain backend.
+- `src/delta.rs`: per-column Δ for squared/quartic/wasserstein in Python's exact
+  chunk/block layout (rayon over blocks), the degenerate-column fallback, and the
+  delta-null (`null_max_deltas`, rayon over permutations, single chunk as in Python).
+- `tests/intermediates.rs`: initial scores, all per-column deltas and all null max-deltas
+  are bit-identical for the 15 cases with OpenBLAS. The pure-Rust backend differs only on
+  width-1 blocks (dgemv): 1 column each in `c257_sq` / `c257_qu`. OpenBLAS's dgemv
+  accumulation order did not match any simple FMA grouping, so it is not emulated.
+
 ## 6. Decisions (agreed 2026-11-12)
 
 - **BLAS**: both backends. The OpenBLAS FFI backend is the default and gives exact parity.

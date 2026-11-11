@@ -6,6 +6,7 @@ use std::path::Path;
 
 use witchi::alignment::{detect_sequence_type, read_alignment};
 use witchi::chi2::{self, Encoded};
+use witchi::delta::{self, Algorithm, ZParams};
 use witchi::permutation::{NullMatrix, NullState};
 
 struct Case {
@@ -106,6 +107,28 @@ fn null_state_matches_python() {
         check(&case.name, "real_per_row_chi2", &real, &d["real_per_row_chi2"], &mut failures);
         check(&case.name, "real_sum", &[witchi::npy::sum(&real)], &d["real_sum"], &mut failures);
         let _ = &case.algorithm;
+    }
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}
+
+#[test]
+fn deltas_match_python() {
+    witchi::blas::init_single_threaded();
+    let mut failures = Vec::new();
+    for case in cases() {
+        let d = load_dump(&case.name);
+        let s = setup(&case);
+        let alg = Algorithm::parse(&case.algorithm).unwrap();
+        let st = NullState::new(NullMatrix::compute(&s.enc, s.n_chars, case.permutations, 4));
+        let z = ZParams::from_null(&st);
+        let counts = chi2::fudge_counts(chi2::count_rows_raw(&s.enc, s.n_chars));
+        let e = chi2::expected_observed(&counts, s.n_chars, s.enc.nrows);
+        let (initial, deltas) =
+            delta::score_and_deltas(alg, &counts, &e, &s.enc, s.n_chars, Some(&z), 1, true);
+        check(&case.name, "initial_score", &[initial], &d["initial_score"], &mut failures);
+        check(&case.name, "deltas", &deltas, &d["deltas"], &mut failures);
+        let nmd = delta::null_max_deltas(alg, &s.enc, s.n_chars, case.permutations, Some(&z), 4);
+        check(&case.name, "null_max_deltas", &nmd, &d["null_max_deltas"], &mut failures);
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
