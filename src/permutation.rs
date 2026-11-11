@@ -53,13 +53,12 @@ pub struct NullMatrix {
 }
 
 impl NullMatrix {
-    pub fn compute(enc: &Encoded, n_chars: usize, permutations: usize, threads: usize) -> Self {
-        let rows: Vec<Vec<f64>> = with_threads(threads, || {
-            (0..permutations)
-                .into_par_iter()
-                .map(|i| permuted_row_chi2(enc, n_chars, SEED_BASE + i as u64))
-                .collect()
-        });
+    /// Runs on the current rayon pool (results do not depend on its size).
+    pub fn compute(enc: &Encoded, n_chars: usize, permutations: usize) -> Self {
+        let rows: Vec<Vec<f64>> = (0..permutations)
+            .into_par_iter()
+            .map(|i| permuted_row_chi2(enc, n_chars, SEED_BASE + i as u64))
+            .collect();
         let sums = rows.iter().map(|r| npy::sum(r)).collect();
         let pooled = rows.concat();
         NullMatrix { permutations, ntaxa: enc.nrows, pooled, sums }

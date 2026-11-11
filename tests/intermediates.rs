@@ -94,7 +94,7 @@ fn null_state_matches_python() {
     for case in cases() {
         let d = load_dump(&case.name);
         let s = setup(&case);
-        let null = NullMatrix::compute(&s.enc, s.n_chars, case.permutations, 4);
+        let null = NullMatrix::compute(&s.enc, s.n_chars, case.permutations);
         let st = NullState::new(null);
         check(&case.name, "null_pooled", &st.null.pooled, &d["null_pooled"], &mut failures);
         check(&case.name, "null_sums", &st.null.sums, &d["null_sums"], &mut failures);
@@ -119,7 +119,7 @@ fn deltas_match_python() {
         let d = load_dump(&case.name);
         let s = setup(&case);
         let alg = Algorithm::parse(&case.algorithm).unwrap();
-        let st = NullState::new(NullMatrix::compute(&s.enc, s.n_chars, case.permutations, 4));
+        let st = NullState::new(NullMatrix::compute(&s.enc, s.n_chars, case.permutations));
         let z = ZParams::from_null(&st);
         let counts = chi2::fudge_counts(chi2::count_rows_raw(&s.enc, s.n_chars));
         let e = chi2::expected_observed(&counts, s.n_chars, s.enc.nrows);
@@ -127,7 +127,7 @@ fn deltas_match_python() {
             delta::score_and_deltas(alg, &counts, &e, &s.enc, s.n_chars, Some(&z), 1, true);
         check(&case.name, "initial_score", &[initial], &d["initial_score"], &mut failures);
         check(&case.name, "deltas", &deltas, &d["deltas"], &mut failures);
-        let nmd = delta::null_max_deltas(alg, &s.enc, s.n_chars, case.permutations, Some(&z), 4);
+        let nmd = delta::null_max_deltas(alg, &s.enc, s.n_chars, case.permutations, Some(&z));
         check(&case.name, "null_max_deltas", &nmd, &d["null_max_deltas"], &mut failures);
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
@@ -162,7 +162,7 @@ fn external_dump_matches_python() {
     let aln = read_alignment(Path::new(&input), &get("--format", "fasta")).unwrap();
     let cs = detect_sequence_type(&aln).unwrap().char_set();
     let enc = Encoded::from_rows(&aln.data, aln.nrows(), aln.ncols, cs);
-    let st = NullState::new(NullMatrix::compute(&enc, cs.len(), perms, 8));
+    let st = NullState::new(NullMatrix::compute(&enc, cs.len(), perms));
     let z = ZParams::from_null(&st);
     let counts = chi2::fudge_counts(chi2::count_rows_raw(&enc, cs.len()));
     let e = chi2::expected_observed(&counts, cs.len(), enc.nrows);

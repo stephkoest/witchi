@@ -392,10 +392,9 @@ pub fn null_max_deltas(
     n_chars: usize,
     permutations: usize,
     z: Option<&ZParams>,
-    threads: usize,
 ) -> Vec<f64> {
     let z = z.map(|zp| zp.clone().with_plan_for(enc.nrows));
-    permutation::with_threads(threads, || {
+    {
         (0..permutations)
             .into_par_iter()
             .map(|i| {
@@ -409,5 +408,5 @@ pub fn null_max_deltas(
                 python_max(&deltas)
             })
             .collect()
-    })
+    }
 }
