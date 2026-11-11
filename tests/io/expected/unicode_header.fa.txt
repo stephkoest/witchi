@@ -1,0 +1,5 @@
+OK protein
+>séq desc
+MKV
+>t2 ✓
+MKA

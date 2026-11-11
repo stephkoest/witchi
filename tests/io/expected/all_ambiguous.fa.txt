@@ -1,0 +1,5 @@
+OK detect-error
+>a
+NN-?
+>b
+X.NX

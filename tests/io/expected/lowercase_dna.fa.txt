@@ -1,0 +1,7 @@
+OK dna
+>a
+ACGTN
+>b
+ACGGT
+>c
+ACG-T

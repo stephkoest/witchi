@@ -1,0 +1,4 @@
+#NEXUS
+begin data; dimensions ntax=1 nchar=2; matrix
+a AC
+; end;

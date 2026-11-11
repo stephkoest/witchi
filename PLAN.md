@@ -154,6 +154,20 @@ Port literally, keeping every quirk:
 - **Python crash found**: `--max_residue_pruned 0` raises `UnboundLocalError` (`per_row_chi2`
   is unset in `recursive_prune`). Under §6 the Rust port exits with a clear error instead.
 
+## 5b. Phase 1 status (done)
+
+- `src/pyfmt.rs`: Python `repr(float)`, `format(x, ".Nf")`, `json.dumps(indent=4)` and
+  csv TSV rows. Checked against 13k fixture floats (`tests/fixtures`, which also assert
+  `str(np.float64) == repr`). Gotcha: Rust's shortest `{:e}` can choose a different
+  17-digit string than Python; we re-round to the same digit count.
+- `src/alignment.rs`, `src/fasta.rs`, `src/nexus.rs`: Biopython-compatible readers, the
+  FASTA writer and the detector. `tests/io.rs` checks 44 inputs (36 edge cases plus all
+  golden inputs) against Python's own pipeline (`scripts/make_io_fixtures.py`).
+- Known reader differences (Rust is more permissive): TREES/SETS/CODONS blocks and
+  charlabels-style commands are not evaluated, so Biopython bugs there (e.g. charlabels
+  followed by a charset → `Unknown character identifier`) don't occur in Rust.
+- A zero-column alignment is an error, as in Python (numpy `TypeError`).
+
 ## 6. Decisions (agreed 2026-11-12)
 
 - **BLAS**: both backends. The OpenBLAS FFI backend is the default and gives exact parity.

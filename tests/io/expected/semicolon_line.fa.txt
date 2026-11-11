@@ -1,0 +1,5 @@
+OK unexpected:;ACDEFG
+>a
+ACDE;X
+>b
+ACDEFG

@@ -1,0 +1,5 @@
+OK unexpected:ABCGMRT
+>t1
+AMGTRT
+>t2
+ACGTBT

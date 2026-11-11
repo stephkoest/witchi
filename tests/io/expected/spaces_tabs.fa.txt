@@ -1,0 +1,5 @@
+OK dna
+>id1	some desc
+ACGTACGT
+>id2 x
+ACGTACGT
