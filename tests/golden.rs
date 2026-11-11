@@ -105,6 +105,17 @@ fn run_case(case: &Case, data_dir: &Path, golden_dir: &Path, work_root: &Path) -
         )];
     }
 
+    // Console output is not required to match, but it currently does (except
+    // the timing line); report drift as a warning only.
+    if let Ok(expected_stdout) = fs::read_to_string(ref_dir.join("stdout.txt")) {
+        let strip = |s: &str| -> String {
+            s.lines().filter(|l| !l.starts_with("Execution time")).collect::<Vec<_>>().join("\n")
+        };
+        if strip(&expected_stdout) != strip(&String::from_utf8_lossy(&output.stdout)) {
+            eprintln!("warn  {}: console output differs from Python (not an error)", case.name);
+        }
+    }
+
     let mut failures = Vec::new();
     let mut refs: Vec<PathBuf> = fs::read_dir(&ref_dir)
         .unwrap()

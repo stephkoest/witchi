@@ -139,7 +139,10 @@ fn deltas_match_python() {
 #[ignore = "manual: needs WITCHI_DUMP / WITCHI_DUMP_INPUT"]
 fn external_dump_matches_python() {
     witchi::blas::init_single_threaded();
-    let dump = std::env::var("WITCHI_DUMP").expect("WITCHI_DUMP");
+    let Ok(dump) = std::env::var("WITCHI_DUMP") else {
+        eprintln!("skipping: WITCHI_DUMP not set");
+        return;
+    };
     let input = std::env::var("WITCHI_DUMP_INPUT").expect("WITCHI_DUMP_INPUT");
     let args = std::env::var("WITCHI_DUMP_ARGS").unwrap_or_default();
     let a: Vec<&str> = args.split_whitespace().collect();
