@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }
 indexmap = "2.14.2"
+rayon = "1.12.0"
 
 [profile.release]
 debug = 1

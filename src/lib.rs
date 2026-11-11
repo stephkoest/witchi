@@ -4,8 +4,11 @@
 //! PLAN.md for the numerical hazards and how each module addresses them.
 
 pub mod alignment;
+pub mod chi2;
 pub mod fasta;
 pub mod nexus;
+pub mod npy;
+pub mod permutation;
 pub mod pyfmt;
 pub mod rng;
 
