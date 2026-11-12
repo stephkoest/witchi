@@ -90,6 +90,8 @@ struct Stats {
 
 impl Pruner<'_> {
     fn compute_null_state(&self, enc: &Encoded) -> OperativeNull {
+        println!("Running {} permutations.", self.opts.permutations);
+        println!("Using {} worker(s) for permutation", self.opts.num_workers_permute);
         let null = NullMatrix::compute(enc, self.n_chars, self.opts.permutations, self.opts.num_workers_permute);
         let state = NullState::new(null);
         let z = ZParams::from_null(&state);
@@ -500,8 +502,6 @@ pub fn run(opts: &PruneOptions) -> Result<()> {
         null_recompute_count: 0,
         last_recompute_ncols: None,
     };
-    println!("Running {} permutations.", opts.permutations);
-    println!("Using {} worker(s) for permutation", opts.num_workers_permute);
     let null = pruner.compute_null_state(&enc);
     let original_null = null.state.null.clone();
     let result = recursive_prune(&mut pruner, &enc, null)?;

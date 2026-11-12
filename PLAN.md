@@ -219,6 +219,11 @@ Port literally, keeping every quirk:
 - `--max_residue_pruned < 1`, `--top_n 0`, `--permutations 0` and an unknown algorithm
   are clean errors. Python crashes or hangs on these.
 
+## 5g. Phase 6 status (done)
+
+- Console output is identical to Python's except the `Execution time` value, for all golden
+  cases. The golden harness warns (doesn't fail) on drift.
+
 ## 6. Decisions (agreed 2026-11-12)
 
 - **BLAS**: both backends. The OpenBLAS FFI backend is the default and gives exact parity.
