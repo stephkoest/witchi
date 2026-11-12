@@ -14,6 +14,6 @@ debug = 1
 
 [features]
 default = ["openblas"]
-# Link OpenBLAS (OPENBLAS_LIB_DIR, default: the witchi-0.2.0 conda env) for
+# Link OpenBLAS (OPENBLAS_LIB_DIR, default: $CONDA_PREFIX/lib) for
 # bit-identical results to Python. Disable for a portable pure-Rust build.
 openblas = []

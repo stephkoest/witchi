@@ -1,0 +1,10 @@
+name: witchi
+channels:
+  - conda-forge
+dependencies:
+  - rust>=1.85
+  - c-compiler
+  # The OpenBLAS build that Python WitChi 0.2.0 used for its reference outputs.
+  - libopenblas=0.3.34=pthreads*
+  - libblas=*=*openblas
+  - libcblas=*=*openblas
