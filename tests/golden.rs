@@ -71,7 +71,7 @@ fn first_difference(expected: &[u8], actual: &[u8]) -> String {
 }
 
 /// Run one case; returns a list of failure descriptions (empty on success).
-fn run_case(case: &Case, data_dir: &Path, golden_dir: &Path, work_root: &Path) -> Vec<String> {
+fn run_case(case: &Case, data_dir: &Path, golden_dir: &Path, work_root: &Path, subcommand: &str) -> Vec<String> {
     let ref_dir = golden_dir.join(&case.name);
     if !ref_dir.is_dir() {
         return vec![format!("missing reference dir {}", ref_dir.display())];
@@ -88,7 +88,7 @@ fn run_case(case: &Case, data_dir: &Path, golden_dir: &Path, work_root: &Path) -
         .unwrap_or_else(|_| env!("CARGO_BIN_EXE_witchi").to_string());
     let output = Command::new(bin)
         .current_dir(&work)
-        .arg("prune")
+        .arg(subcommand)
         .arg("--file")
         .arg(&case.input)
         .args(&case.args)
@@ -105,18 +105,23 @@ fn run_case(case: &Case, data_dir: &Path, golden_dir: &Path, work_root: &Path) -
         )];
     }
 
-    // Console output is not required to match, but it currently does (except
-    // the timing line); report drift as a warning only.
+    // Console output: for `prune` it is not required to match (warning only);
+    // for `test` it is the primary output and must match (minus the timing line).
+    let mut failures = Vec::new();
     if let Ok(expected_stdout) = fs::read_to_string(ref_dir.join("stdout.txt")) {
         let strip = |s: &str| -> String {
             s.lines().filter(|l| !l.starts_with("Execution time")).collect::<Vec<_>>().join("\n")
         };
-        if strip(&expected_stdout) != strip(&String::from_utf8_lossy(&output.stdout)) {
-            eprintln!("warn  {}: console output differs from Python (not an error)", case.name);
+        let (e, a) = (strip(&expected_stdout), strip(&String::from_utf8_lossy(&output.stdout)));
+        if e != a {
+            if subcommand == "test" {
+                failures.push(format!("stdout.txt: {}", first_difference(e.as_bytes(), a.as_bytes())));
+            } else {
+                eprintln!("warn  {}: console output differs from Python (not an error)", case.name);
+            }
         }
     }
 
-    let mut failures = Vec::new();
     let mut refs: Vec<PathBuf> = fs::read_dir(&ref_dir)
         .unwrap()
         .map(|e| e.unwrap().path())
@@ -140,7 +145,7 @@ fn run_case(case: &Case, data_dir: &Path, golden_dir: &Path, work_root: &Path) -
     failures
 }
 
-fn run_tier(manifest: &Path, data_dir: &Path, golden_dir: &Path, tier: &str) {
+fn run_tier(manifest: &Path, data_dir: &Path, golden_dir: &Path, tier: &str, subcommand: &str) {
     let filter = std::env::var("WITCHI_GOLDEN_FILTER").unwrap_or_default();
     let work_root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("golden-{tier}"));
     let cases: Vec<Case> = read_manifest(manifest)
@@ -151,7 +156,7 @@ fn run_tier(manifest: &Path, data_dir: &Path, golden_dir: &Path, tier: &str) {
 
     let mut failed = Vec::new();
     for case in &cases {
-        let failures = run_case(case, data_dir, golden_dir, &work_root);
+        let failures = run_case(case, data_dir, golden_dir, &work_root, subcommand);
         if failures.is_empty() {
             eprintln!("ok    {}", case.name);
         } else {
@@ -174,7 +179,7 @@ fn run_tier(manifest: &Path, data_dir: &Path, golden_dir: &Path, tier: &str) {
 #[test]
 fn golden_small() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
-    run_tier(&root.join("cases.tsv"), &root.join("data"), &root.join("golden"), "small");
+    run_tier(&root.join("cases.tsv"), &root.join("data"), &root.join("golden"), "small", "prune");
 }
 
 #[test]
@@ -186,7 +191,13 @@ fn golden_large() {
         eprintln!("skipping: {} does not exist", golden.display());
         return;
     }
-    run_tier(&root.join("cases_large.tsv"), &golden.join("data"), &golden, "large");
+    run_tier(&root.join("cases_large.tsv"), &golden.join("data"), &golden, "large", "prune");
+}
+
+#[test]
+fn golden_test_command() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    run_tier(&root.join("cases_test.tsv"), &root.join("data"), &root.join("golden_test"), "test", "test");
 }
 
 #[test]

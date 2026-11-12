@@ -1,0 +1,15 @@
+witchi 0.2.0
+Detected amino acid sequence.
+Running 50 permutations.
+Using 1 worker(s) for permutation
+Alignment chi2score: 1467.63 | Permutations alignment chi2scores: 514.23 - 693.17 | Empirical-P: 0.0
+Alignment mean taxa chi2score: 29.35 | Permutations mean taxa chi2score: 11.74 | Alignment Z-score: 30.15
+Biased Taxa based on corrected empirical-P-values: 21 of 50
+Printing taxa p-values and z-scores to file: gtdb_n50_c500_scores.tsv
+Top 5 taxa z-scores and corresponding empirical p-values:
+G000496195	11.31	0.0000
+G000416085	10.65	0.0000
+G000387965	10.44	0.0000
+G000806015	9.82	0.0000
+G000230955	9.67	0.0000
+Execution time for testing: 0.28 seconds
