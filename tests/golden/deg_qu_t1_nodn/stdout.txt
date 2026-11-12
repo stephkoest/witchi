@@ -1,0 +1,48 @@
+witchi 0.2.0
+Starting pruning workflow
+Chi² calculator using 1 worker(s)
+Permutation test using 1 worker(s)
+Pruning algorithm: quartic
+Initial top_n: 1
+Detected DNA sequence.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Columns removed: 0, 0.00% | Biased taxa permutation: 5 | Alignment Z-score: 19.78 | Alignment p-value: 0.00
+Columns removed: 1, 1.67% | Biased taxa permutation: 5 | Alignment Z-score: 18.68 | Alignment p-value: 0.00
+Columns removed: 2, 3.33% | Biased taxa permutation: 4 | Alignment Z-score: 17.57 | Alignment p-value: 0.00
+Columns removed: 3, 5.00% | Biased taxa permutation: 5 | Alignment Z-score: 16.55 | Alignment p-value: 0.00
+Columns removed: 4, 6.67% | Biased taxa permutation: 4 | Alignment Z-score: 15.60 | Alignment p-value: 0.00
+Columns removed: 5, 8.33% | Biased taxa permutation: 4 | Alignment Z-score: 14.28 | Alignment p-value: 0.00
+Columns removed: 6, 10.00% | Biased taxa permutation: 3 | Alignment Z-score: 13.38 | Alignment p-value: 0.00
+Columns removed: 7, 11.67% | Biased taxa permutation: 2 | Alignment Z-score: 12.71 | Alignment p-value: 0.00
+Columns removed: 8, 13.33% | Biased taxa permutation: 2 | Alignment Z-score: 11.74 | Alignment p-value: 0.00
+Columns removed: 9, 15.00% | Biased taxa permutation: 2 | Alignment Z-score: 10.91 | Alignment p-value: 0.00
+Columns removed: 10, 16.67% | Biased taxa permutation: 2 | Alignment Z-score: 10.37 | Alignment p-value: 0.00
+Columns removed: 11, 18.33% | Biased taxa permutation: 2 | Alignment Z-score: 9.68 | Alignment p-value: 0.00
+Columns removed: 12, 20.00% | Biased taxa permutation: 2 | Alignment Z-score: 9.12 | Alignment p-value: 0.00
+Columns removed: 13, 21.67% | Biased taxa permutation: 2 | Alignment Z-score: 8.34 | Alignment p-value: 0.00
+Columns removed: 14, 23.33% | Biased taxa permutation: 2 | Alignment Z-score: 7.77 | Alignment p-value: 0.00
+Columns removed: 15, 25.00% | Biased taxa permutation: 2 | Alignment Z-score: 7.13 | Alignment p-value: 0.00
+Columns removed: 16, 26.67% | Biased taxa permutation: 1 | Alignment Z-score: 6.62 | Alignment p-value: 0.00
+Columns removed: 17, 28.33% | Biased taxa permutation: 1 | Alignment Z-score: 5.97 | Alignment p-value: 0.00
+Columns removed: 18, 30.00% | Biased taxa permutation: 1 | Alignment Z-score: 5.77 | Alignment p-value: 0.00
+Columns removed: 19, 31.67% | Biased taxa permutation: 1 | Alignment Z-score: 5.36 | Alignment p-value: 0.00
+Columns removed: 20, 33.33% | Biased taxa permutation: 1 | Alignment Z-score: 4.68 | Alignment p-value: 0.00
+Columns removed: 21, 35.00% | Biased taxa permutation: 1 | Alignment Z-score: 4.27 | Alignment p-value: 0.00
+Columns removed: 22, 36.67% | Biased taxa permutation: 1 | Alignment Z-score: 3.67 | Alignment p-value: 0.00
+Columns removed: 23, 38.33% | Biased taxa permutation: 1 | Alignment Z-score: 3.35 | Alignment p-value: 0.00
+Columns removed: 24, 40.00% | Biased taxa permutation: 1 | Alignment Z-score: 2.57 | Alignment p-value: 0.00
+Columns removed: 25, 41.67% | Biased taxa permutation: 0 | Alignment Z-score: 2.17 | Alignment p-value: 0.00
+Columns removed: 26, 43.33% | Biased taxa permutation: 0 | Alignment Z-score: 1.63 | Alignment p-value: 0.00
+Columns removed: 27, 45.00% | Biased taxa permutation: 0 | Alignment Z-score: 1.40 | Alignment p-value: 0.05
+Columns removed: 28, 46.67% | Biased taxa permutation: 0 | Alignment Z-score: 1.20 | Alignment p-value: 0.10
+Null recompute #1 on pruned alignment (32 columns); resuming pruning.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Columns removed: 28, 46.67% | Biased taxa permutation: 0 | Alignment Z-score: 1.09 | Alignment p-value: 0.15
+Pruned 60 → 32 columns (-28, 46.67%) | Z 19.78 → 1.20 | p 0.00 → 0.10 | biased 5/12 → 0/12 | stop: alignment p-value | null recomputes: 1
+Pruned alignment saved to dna_degenerate_quartic_s1_pruned.fasta
+Columns pruned in order saved to: dna_degenerate_quartic_s1_pruned.tsv
+Taxa before/after Z and p-values printed to dna_degenerate_quartic_s1_pruned_scores.tsv
+Chiscore values from permutation testing printed to dna_degenerate_quartic_s1_pruned_score_dict.json
+Execution time: 0.13 seconds

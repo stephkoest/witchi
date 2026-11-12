@@ -1,0 +1,22 @@
+witchi 0.2.0
+Starting pruning workflow
+Chi² calculator using 1 worker(s)
+Permutation test using 1 worker(s)
+Pruning algorithm: wasserstein
+Initial top_n: 5
+Detected amino acid sequence.
+Running 50 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=50): mean=0.028524, p95=0.038402
+Columns removed: 0, 0.00% | Biased taxa permutation: 21 | Alignment Z-score: 30.15 | Alignment p-value: 0.00
+Columns removed: 5, 1.00% | Biased taxa permutation: 17 | Alignment Z-score: 27.06 | Alignment p-value: 0.00
+Columns removed: 10, 2.00% | Biased taxa permutation: 17 | Alignment Z-score: 24.43 | Alignment p-value: 0.00
+Columns removed: 15, 3.00% | Biased taxa permutation: 15 | Alignment Z-score: 22.14 | Alignment p-value: 0.00
+Columns removed: 20, 4.00% | Biased taxa permutation: 13 | Alignment Z-score: 20.15 | Alignment p-value: 0.00
+Pruned 500 → 475 columns (-25, 5.00%) | Z 30.15 → 18.36 | p 0.00 → 0.00 | biased 21/50 → 9/50 | stop: reached --max_residue_pruned cap (23) | null recomputes: 0
+Pruned alignment saved to gtdb_n50_c500_wasserstein_s5_pruned.fasta
+Columns pruned in order saved to: gtdb_n50_c500_wasserstein_s5_pruned.tsv
+Taxa before/after Z and p-values printed to gtdb_n50_c500_wasserstein_s5_pruned_scores.tsv
+Chiscore values from permutation testing printed to gtdb_n50_c500_wasserstein_s5_pruned_score_dict.json
+Execution time: 0.84 seconds

@@ -1,0 +1,7 @@
+#NEXUS
+begin data; dimensions ntax=2 nchar=6; format datatype=dna;
+matrix
+t1 A(AC)GT(ag)T
+t2 ACGT(CGT)T
+;
+end;

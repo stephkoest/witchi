@@ -1,0 +1,25 @@
+# v0.3.1 scaling for the README's Computational Requirements section (scripts/bench_compare.py).
+# Defaults: wasserstein, 100 permutations, top_n 1, cap 100, delta-null on.
+t1000_c1000_w4	bench/data/gtdb_t1000_c1000.faa	0	--num_workers_chisq 4 --num_workers_permute 4
+t1000_c1000_w16	bench/data/gtdb_t1000_c1000.faa	0	--num_workers_chisq 16 --num_workers_permute 16
+t1000_c1000_w48	bench/data/gtdb_t1000_c1000.faa	0	--num_workers_chisq 48 --num_workers_permute 48
+t10000_c1000_w4	bench/data/gtdb_t10000_c1000.faa	0	--num_workers_chisq 4 --num_workers_permute 4
+t10000_c1000_w16	bench/data/gtdb_t10000_c1000.faa	0	--num_workers_chisq 16 --num_workers_permute 16
+t10000_c1000_w48	bench/data/gtdb_t10000_c1000.faa	0	--num_workers_chisq 48 --num_workers_permute 48
+t10000_c10000_w4	bench/data/gtdb_t10000_c10000.faa	0	--num_workers_chisq 4 --num_workers_permute 4
+t10000_c10000_w16	bench/data/gtdb_t10000_c10000.faa	0	--num_workers_chisq 16 --num_workers_permute 16
+t10000_c10000_w48	bench/data/gtdb_t10000_c10000.faa	0	--num_workers_chisq 48 --num_workers_permute 48
+full_msa_w4	test_data/gtdb_r237_ar53_concatenated.masked.faa	0	--num_workers_chisq 4 --num_workers_permute 4
+full_msa_w16	test_data/gtdb_r237_ar53_concatenated.masked.faa	0	--num_workers_chisq 16 --num_workers_permute 16
+full_msa_w48	test_data/gtdb_r237_ar53_concatenated.masked.faa	0	--num_workers_chisq 48 --num_workers_permute 48
+t100000_c2000_w4	bench/data/gtdb_syn_t100000_c2000.faa	0	--num_workers_chisq 4 --num_workers_permute 4
+t100000_c2000_w16	bench/data/gtdb_syn_t100000_c2000.faa	0	--num_workers_chisq 16 --num_workers_permute 16
+t100000_c2000_w48	bench/data/gtdb_syn_t100000_c2000.faa	0	--num_workers_chisq 48 --num_workers_permute 48
+# The Python v0.2.0 full-MSA reference command (412 s wall).
+full_msa_pyref	test_data/gtdb_r237_ar53_concatenated.masked.faa	0	--pruning_algorithm wasserstein --top_n 10 --permutations 20 --max_residue_pruned 50 --num_workers_permute 16 --num_workers_chisq 4
+# Single thread.
+t1000_c1000_w1	bench/data/gtdb_t1000_c1000.faa	0	
+t10000_c1000_w1	bench/data/gtdb_t10000_c1000.faa	0	
+t10000_c10000_w1	bench/data/gtdb_t10000_c10000.faa	0	
+full_msa_w1	test_data/gtdb_r237_ar53_concatenated.masked.faa	0	
+t100000_c2000_w1	bench/data/gtdb_syn_t100000_c2000.faa	0	

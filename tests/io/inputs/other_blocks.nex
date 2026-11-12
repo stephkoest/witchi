@@ -1,0 +1,10 @@
+#nexus
+[ leading comment ]
+begin taxa; dimensions ntax=2; taxlabels a b; end;
+begin characters; dimensions nchar=5; format datatype=protein; matrix
+a MKVLA
+b MKVLG
+; end;
+begin trees; tree t1 = [&U] (a,b); end;
+begin sets; charset first = 1-2; end;
+begin assumptions; options deftype=unord; end;

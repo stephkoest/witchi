@@ -1,0 +1,35 @@
+witchi 0.2.0
+Starting pruning workflow
+Chi² calculator using 1 worker(s)
+Permutation test using 1 worker(s)
+Pruning algorithm: squared
+Initial top_n: 1
+Detected DNA sequence.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=20): mean=2.767347, p95=4.002147
+Columns removed: 0, 0.00% | Biased taxa permutation: 5 | Alignment Z-score: 19.78 | Alignment p-value: 0.00
+Columns removed: 1, 1.67% | Biased taxa permutation: 4 | Alignment Z-score: 18.46 | Alignment p-value: 0.00
+Columns removed: 2, 3.33% | Biased taxa permutation: 4 | Alignment Z-score: 17.33 | Alignment p-value: 0.00
+Columns removed: 3, 5.00% | Biased taxa permutation: 4 | Alignment Z-score: 16.23 | Alignment p-value: 0.00
+Columns removed: 4, 6.67% | Biased taxa permutation: 4 | Alignment Z-score: 15.12 | Alignment p-value: 0.00
+Columns removed: 5, 8.33% | Biased taxa permutation: 4 | Alignment Z-score: 14.17 | Alignment p-value: 0.00
+Columns removed: 6, 10.00% | Biased taxa permutation: 3 | Alignment Z-score: 13.23 | Alignment p-value: 0.00
+Null recompute #1 on pruned alignment (54 columns); resuming pruning.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=20): mean=2.433709, p95=3.201621
+Columns removed: 6, 10.00% | Biased taxa permutation: 2 | Alignment Z-score: 10.59 | Alignment p-value: 0.00
+Columns removed: 7, 11.67% | Biased taxa permutation: 2 | Alignment Z-score: 9.95 | Alignment p-value: 0.00
+Columns removed: 8, 13.33% | Biased taxa permutation: 2 | Alignment Z-score: 9.29 | Alignment p-value: 0.00
+Columns removed: 9, 15.00% | Biased taxa permutation: 2 | Alignment Z-score: 8.68 | Alignment p-value: 0.00
+Columns removed: 10, 16.67% | Biased taxa permutation: 2 | Alignment Z-score: 8.13 | Alignment p-value: 0.00
+Columns removed: 11, 18.33% | Biased taxa permutation: 1 | Alignment Z-score: 7.57 | Alignment p-value: 0.00
+Pruned 60 → 49 columns (-11, 18.33%) | Z 19.78 → 9.25 | p 0.00 → 0.00 | biased 5/12 → 2/12 | stop: delta not significant (p=0.100, max_delta=3.164217) | null recomputes: 1
+Pruned alignment saved to dna_degenerate_squared_s1_pruned.fasta
+Columns pruned in order saved to: dna_degenerate_squared_s1_pruned.tsv
+Taxa before/after Z and p-values printed to dna_degenerate_squared_s1_pruned_scores.tsv
+Chiscore values from permutation testing printed to dna_degenerate_squared_s1_pruned_score_dict.json
+Execution time: 0.17 seconds

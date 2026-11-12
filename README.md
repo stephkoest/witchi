@@ -1,5 +1,4 @@
 # WitChi: A Compositional Bias Testing and Pruning Tool for Multiple Sequence Alignments using Chi-squared Statistics
-![CI](https://github.com/stephkoest/witchi/actions/workflows/ci.yml/badge.svg)
 
 WitChi detects and prunes compositionally biased columns in multiple sequence alignments (MSAs) using empirical chi-squared testing.
 
@@ -9,33 +8,38 @@ WitChi detects and prunes compositionally biased columns in multiple sequence al
 * **Empirical null via column permutation** — chi-squared thresholds derived from the alignment itself, no parametric assumptions.
 * **Three pruning algorithms**: squared (Δχ²), quartic (Δχ⁴), Wasserstein (W₁ on Z-score quantiles).
 * **Per-column delta-null stopping**: halts pruning when no column's Δχ² exceeds what a homogeneous alignment of the same size and composition would produce.
-* **Parallelised** via joblib (independent permutations and per-column delta scoring).
+* **Parallelised** with multithreading (independent permutations and per-column delta scoring).
 
 ![WitChi workflow overview](docs/Fig1.png)
 
 Overview of the WitChi workflows for detecting and reducing compositional bias in multiple sequence alignments. (A) The 'test' workflow (blue background) computes taxon-specific χ² scores and builds an empirical null distribution by column permutation (100×), identifying biased taxa. The 'prune' workflow (purple background) iteratively removes the alignment columns with the highest Δ-score — defined by the active scoring algorithm (squared, Δχ²; quartic, Δχ⁴; or Wasserstein, ΔW) — followed by a convergence check that halts pruning once the alignment-level empirical p-value exceeds 0.05 or no remaining column's Δ-score exceeds the per-column delta-null (whichever occurs first). (B) An example observed MSA and one corresponding column-permuted MSA, showing how taxon-specific composition is homogenized while the column-wise (global) residue distribution is preserved; the bar plot at right compares taxon χ² scores between the observed and permuted alignments. (C) Left: per-column Δ-scores for the observed alignment in (B), with the most biased column flagged for removal (dashed box) when its Δ-score exceeds the maximum expected under the permuted null. Middle (pruning loop): the density of taxon-specific χ² scores shifts from the observed alignment (orange) toward the permuted null (pink) as columns are removed. Right (convergence): once the stopping criterion is met, pruning halts and the observed taxon χ² distribution overlaps the permuted null.
 
 ## Installation
-```bash
-conda env create -f environment.yml
-conda activate witchi
-```
-
-To add witchi to an existing conda env, include this in your `environment.yml`:
-```yaml
-- pip:
-    - git+https://github.com/stephkoest/witchi
-```
-
-For development (editable install + tests):
+WitChi is implemented in Rust. It is built inside a conda environment that provides the Rust toolchain and OpenBLAS:
 ```bash
 git clone https://github.com/stephkoest/witchi.git
 cd witchi
 conda env create -f environment.yml
 conda activate witchi
-pip install -e .
-pytest tests/
+cargo install --path . --root "$CONDA_PREFIX"
 ```
+This places the `witchi` executable in the environment's `bin/` directory.
+
+To add witchi to an existing conda env, install `rust`, `c-compiler` and `libopenblas` from conda-forge into it, then:
+```bash
+cargo install --git https://github.com/stephkoest/witchi --root "$CONDA_PREFIX"
+```
+
+For development (build + tests):
+```bash
+git clone https://github.com/stephkoest/witchi.git
+cd witchi
+conda env create -f environment.yml
+conda activate witchi
+cargo build --release
+cargo test --release
+```
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the tests against the Python v0.2.0 reference outputs.
 
 ## Usage
 ### Pruning Alignment
@@ -56,6 +60,7 @@ witchi prune --file alignment.fasta --format fasta --max_residue_pruned 100 --pe
 - `--top_n`: Number of top biased columns to prune per iteration (default: 1).
 - `--pruning_algorithm`: Pruning algorithm to use (squared, wasserstein, quartic; default: wasserstein).
 - `--delta-null` / `--no-delta-null`: Enable/disable the delta-null stopping criterion (default: enabled; see section below).
+- `--threads`: Number of CPU threads to use (default: the larger of `--num_workers_chisq` and `--num_workers_permute`). Never changes the results.
 
 ### Permutation Testing
 Run permutation tests to establish empirical Chi-square distributions:
@@ -69,6 +74,7 @@ witchi test --file alignment.fasta --format fasta --num_workers_permute 2 --perm
 - `--num_workers_permute`: Number of CPU threads (default: 1).
 - `--permutations`: Number of permutations (default: 100).
 - `--create_output`: Flag to create output file with z-scores and empirical p-values per taxon.
+- `--threads`: Number of CPU threads to use (default: `--num_workers_permute`). Never changes the results.
 
 ## Pruning Algorithms
 - **Squared Pruning**: Prioritizes columns with the highest delta Chi-square score.
@@ -85,7 +91,7 @@ For each `witchi prune` run, four files are written next to the input alignment:
 ## How It Works
 **1. Read Alignment:**
 
-  * The alignment file is parsed and converted to a NumPy array.
+  * The alignment file is parsed and converted to a residue matrix.
 
 **2. Empirical Thresholds:**
 
@@ -120,6 +126,21 @@ Complements the alignment-level p-value with per-column justification.
 3. **Graceful touchdown**: batch sizes naturally shrink as convergence approaches, with no manual threshold.
 
 Enabled by default for all three pruning algorithms; disable with `--no-delta-null` for alignment-level-only stopping.
+
+## Computational Requirements
+Run times of `witchi prune` v0.3.1 with default settings (Wasserstein, 100 permutations, delta-null on, up to 100 columns pruned) on a 2 × AMD EPYC 7402 server, with the CPU count set by `--num_workers_chisq` and `--num_workers_permute`:
+
+| Alignment (taxa × columns) | 1 CPU | 4 CPUs | 16 CPUs | 48 CPUs | Peak memory (1 / 48 CPUs) |
+|---|---:|---:|---:|---:|---:|
+| 1,000 × 1,000 | 6.3 s | 1.7 s | 1.0 s | 0.9 s | 21 MB / 0.3 GB |
+| 10,000 × 1,000 | 52 s | 13 s | 4.6 s | 3.0 s | 51 MB / 0.7 GB |
+| 10,000 × 10,000 | 8.4 min | 2.1 min | 37 s | 17 s | 0.1 GB / 0.8 GB |
+| 12,944 × 13,540 (GTDB r237 archaea) | 14.6 min | 3.7 min | 64 s | 27 s | 0.2 GB / 1.0 GB |
+| 100,000 × 2,000 | 18.4 min | 5.1 min | 1.6 min | 54 s | 0.6 GB / 5.3 GB |
+
+Run time grows roughly linearly with the number of alignment cells (taxa × columns) and with `--permutations`. Peak memory is about one byte per alignment cell plus working memory per CPU that grows with the number of taxa.
+
+On the GTDB r237 archaeal alignment (`--top_n 10 --permutations 20 --max_residue_pruned 50`, 16 CPUs), v0.3.1 takes 11 s with a peak memory of 0.37 GB, about 37× faster and with 60× less memory than the Python v0.2.0 implementation (412 s and 22 GB summed across its worker processes).
 
 ## License
 witchi is licensed under the MIT License.

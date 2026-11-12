@@ -1,17 +1,10 @@
 name: witchi
 channels:
   - conda-forge
-  - bioconda
-  - defaults
 dependencies:
-  - python
-  - numpy
-  - joblib
-  - seaborn
-  - matplotlib
-  - pytest
-  - pip
-  - git
-  - pip:
-    - pre-commit
-    - git+https://github.com/stephkoest/witchi
+  - rust>=1.85
+  - c-compiler
+  # The OpenBLAS build that Python WitChi 0.2.0 used for its reference outputs.
+  - libopenblas=0.3.34=pthreads*
+  - libblas=*=*openblas
+  - libcblas=*=*openblas

@@ -1,0 +1,16 @@
+# name	input	args (subset of dump_intermediates.py options)
+n20_sq	gtdb_n20_c100.faa	--pruning_algorithm squared --permutations 20
+n20_wa	gtdb_n20_c100.faa	--pruning_algorithm wasserstein --permutations 20
+n50_qu	gtdb_n50_c500.faa	--pruning_algorithm quartic --permutations 50
+n50_wa	gtdb_n50_c500.faa	--pruning_algorithm wasserstein --permutations 50
+c257_sq	gtdb_n50_c257.faa	--pruning_algorithm squared --permutations 30
+c257_wa	gtdb_n50_c257.faa	--pruning_algorithm wasserstein --permutations 30
+c257_qu	gtdb_n50_c257.faa	--pruning_algorithm quartic --permutations 30
+quirks_wa	gtdb_quirks.faa	--pruning_algorithm wasserstein --permutations 40
+dna_sq	dna_n30_c300.fasta	--pruning_algorithm squared --permutations 50
+dna_wa	dna_n30_c300.fasta	--pruning_algorithm wasserstein --permutations 50
+deg_sq	dna_degenerate.fasta	--pruning_algorithm squared --permutations 20
+deg_qu	dna_degenerate.fasta	--pruning_algorithm quartic --permutations 20
+deg_wa	dna_degenerate.fasta	--pruning_algorithm wasserstein --permutations 20
+nex_wa	example.nex	--format nexus --pruning_algorithm wasserstein --permutations 20
+n100_qu	gtdb_n100_c1000.faa	--pruning_algorithm quartic --permutations 100

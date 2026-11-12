@@ -1,0 +1,31 @@
+witchi 0.2.0
+Starting pruning workflow
+Chi² calculator using 1 worker(s)
+Permutation test using 1 worker(s)
+Pruning algorithm: squared
+Initial top_n: 20
+Detected amino acid sequence.
+Running 50 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=50): mean=6.659102, p95=8.439855
+Columns removed: 0, 0.00% | Biased taxa permutation: 21 | Alignment Z-score: 30.15 | Alignment p-value: 0.00
+Columns removed: 20, 4.00% | Biased taxa permutation: 12 | Alignment Z-score: 20.32 | Alignment p-value: 0.00
+Columns removed: 40, 8.00% | Biased taxa permutation: 7 | Alignment Z-score: 13.76 | Alignment p-value: 0.00
+Touchdown: delta-null partial batch (rank 2 fails at p=0.060, delta=8.372734). Rolled back 20 columns, reduced top_n to 2, resuming pruning.
+Null recompute #1 on pruned alignment (480 columns); resuming pruning.
+Running 50 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=50): mean=6.705292, p95=9.387618
+Columns removed: 20, 4.00% | Biased taxa permutation: 17 | Alignment Z-score: 20.53 | Alignment p-value: 0.00
+Columns removed: 22, 4.40% | Biased taxa permutation: 16 | Alignment Z-score: 19.76 | Alignment p-value: 0.00
+Columns removed: 24, 4.80% | Biased taxa permutation: 15 | Alignment Z-score: 19.02 | Alignment p-value: 0.00
+Columns removed: 26, 5.20% | Biased taxa permutation: 15 | Alignment Z-score: 18.32 | Alignment p-value: 0.00
+Columns removed: 28, 5.60% | Biased taxa permutation: 14 | Alignment Z-score: 17.65 | Alignment p-value: 0.00
+Pruned 500 → 472 columns (-28, 5.60%) | Z 30.15 → 17.37 | p 0.00 → 0.00 | biased 21/50 → 9/50 | stop: delta not significant (p=0.060, max_delta=9.527859) | null recomputes: 1
+Pruned alignment saved to gtdb_n50_c500_squared_s20_pruned.fasta
+Columns pruned in order saved to: gtdb_n50_c500_squared_s20_pruned.tsv
+Taxa before/after Z and p-values printed to gtdb_n50_c500_squared_s20_pruned_scores.tsv
+Chiscore values from permutation testing printed to gtdb_n50_c500_squared_s20_pruned_score_dict.json
+Execution time: 1.16 seconds

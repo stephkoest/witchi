@@ -1,0 +1,19 @@
+[package]
+name = "witchi"
+version = "0.3.1"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+indexmap = "2.14.2"
+rayon = "1.12.0"
+
+[profile.release]
+debug = 1
+
+[features]
+default = ["openblas"]
+# Link OpenBLAS (OPENBLAS_LIB_DIR, default: $CONDA_PREFIX/lib) for
+# bit-identical results to Python. Disable for a portable pure-Rust build.
+openblas = []

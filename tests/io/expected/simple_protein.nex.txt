@@ -1,0 +1,7 @@
+OK protein
+>alpha
+MKVLAAGHIKLM
+>beta
+MKV-AAGHIKL?
+>gamma
+MKVLAAGHIKLM
