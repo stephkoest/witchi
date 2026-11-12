@@ -69,6 +69,12 @@ struct PruneArgs {
     /// Disable the delta-null stopping criterion.
     #[arg(long = "no-delta-null", overrides_with = "delta_null")]
     no_delta_null: bool,
+
+    /// Rust port only: number of worker threads. Defaults to the larger of
+    /// --num_workers_chisq and --num_workers_permute. Does not affect results
+    /// (unlike --num_workers_chisq, which sets Python's column chunking).
+    #[arg(long, default_value_t = 0)]
+    threads: usize,
 }
 
 #[derive(Args, Debug)]
@@ -101,7 +107,28 @@ impl PruneArgs {
     }
 }
 
+/// OpenBLAS starts its own worker threads when the library is loaded, which
+/// then spin and waste CPU even though every call here is single-threaded.
+/// It only honours `OPENBLAS_NUM_THREADS` at load time, so re-exec once with
+/// it set (results are unaffected: the same single-threaded kernels run).
+#[cfg(all(feature = "openblas", unix))]
+fn ensure_single_threaded_openblas() {
+    use std::os::unix::process::CommandExt;
+    if std::env::var_os("OPENBLAS_NUM_THREADS").is_some() {
+        return;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let err = std::process::Command::new(exe)
+            .args(std::env::args_os().skip(1))
+            .env("OPENBLAS_NUM_THREADS", "1")
+            .exec();
+        eprintln!("warning: could not re-exec with OPENBLAS_NUM_THREADS=1: {err}");
+    }
+}
+
 fn main() -> Result<()> {
+    #[cfg(all(feature = "openblas", unix))]
+    ensure_single_threaded_openblas();
     let cli = Cli::parse();
     println!("witchi {WITCHI_VERSION}");
     match cli.command {
@@ -116,6 +143,7 @@ fn main() -> Result<()> {
                 num_workers_permute: args.num_workers_permute,
                 top_n: args.top_n,
                 pruning_algorithm: args.pruning_algorithm,
+                threads: args.threads,
             };
             witchi::pruner::run(&opts)
         }

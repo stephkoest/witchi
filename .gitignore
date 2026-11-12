@@ -2,3 +2,4 @@
 # 175 MB source MSA; regenerate subsets with scripts/make_inputs.py
 /test_data/*.faa
 /tests/golden_large/
+/tests/golden_full/

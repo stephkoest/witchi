@@ -15,6 +15,13 @@ use crate::output;
 use crate::permutation::{self, NullMatrix, NullState, RobustStats};
 use crate::pyfmt::fixed;
 
+/// Stage timings on stderr when `WITCHI_TIMING` is set (development aid).
+pub(crate) fn timing(label: &str, since: Instant) {
+    if std::env::var_os("WITCHI_TIMING").is_some() {
+        eprintln!("[timing] {label}: {:.3}s", since.elapsed().as_secs_f64());
+    }
+}
+
 /// Command-line options of `witchi prune`.
 #[derive(Clone, Debug)]
 pub struct PruneOptions {
@@ -27,6 +34,18 @@ pub struct PruneOptions {
     pub top_n: usize,
     pub pruning_algorithm: String,
     pub delta_null: bool,
+    /// Rust-only: worker threads (0 = max of the two `num_workers_*`).
+    pub threads: usize,
+}
+
+impl PruneOptions {
+    pub fn effective_threads(&self) -> usize {
+        if self.threads > 0 {
+            self.threads
+        } else {
+            self.num_workers_chisq.max(self.num_workers_permute).max(1)
+        }
+    }
 }
 
 /// One row of the prune trace (`prune_dict` value).
@@ -92,19 +111,24 @@ impl Pruner<'_> {
     fn compute_null_state(&self, enc: &Encoded) -> OperativeNull {
         println!("Running {} permutations.", self.opts.permutations);
         println!("Using {} worker(s) for permutation", self.opts.num_workers_permute);
-        let null = NullMatrix::compute(enc, self.n_chars, self.opts.permutations, self.opts.num_workers_permute);
+        let t0 = Instant::now();
+        let null = NullMatrix::compute(enc, self.n_chars, self.opts.permutations);
+        timing("null matrix", t0);
+        let t0 = Instant::now();
         let state = NullState::new(null);
+        timing("null state", t0);
         let z = ZParams::from_null(&state);
         let max_deltas = if self.opts.delta_null {
             println!("Computing null delta distribution for stopping criterion...");
+            let t0 = Instant::now();
             let md = delta::null_max_deltas(
                 self.alg,
                 enc,
                 self.n_chars,
                 self.opts.permutations,
                 Some(&z),
-                self.opts.num_workers_permute,
             );
+            timing("delta null", t0);
             println!(
                 "Null max-delta distribution (n={}): mean={}, p95={}",
                 self.opts.permutations,
@@ -301,6 +325,7 @@ fn recursive_prune(p: &mut Pruner, original: &Encoded, initial_null: OperativeNu
             break;
         }
 
+        let t0 = Instant::now();
         let (initial, deltas) = delta::score_and_deltas(
             p.alg,
             &stats.counts,
@@ -311,6 +336,7 @@ fn recursive_prune(p: &mut Pruner, original: &Encoded, initial_null: OperativeNu
             opts.num_workers_chisq,
             true,
         );
+        timing("iteration deltas", t0);
         initial_global_chi2 = Some(initial);
         chi2_differences = deltas;
 
@@ -467,6 +493,14 @@ fn recursive_prune(p: &mut Pruner, original: &Encoded, initial_null: OperativeNu
 
 /// `AlignmentPruner.run`: read, prune, write the four output files.
 pub fn run(opts: &PruneOptions) -> Result<()> {
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(opts.effective_threads())
+        .build()
+        .map_err(|e| anyhow::anyhow!("cannot start thread pool: {e}"))?;
+    pool.install(|| run_inner(opts))
+}
+
+fn run_inner(opts: &PruneOptions) -> Result<()> {
     let start = Instant::now();
     let Some(alg) = Algorithm::parse(&opts.pruning_algorithm) else {
         bail!("Unknown pruning algorithm: {}", opts.pruning_algorithm);
@@ -487,7 +521,9 @@ pub fn run(opts: &PruneOptions) -> Result<()> {
     println!("Pruning algorithm: {}", opts.pruning_algorithm);
     println!("Initial top_n: {}", opts.top_n);
 
+    let t0 = Instant::now();
     let aln: Alignment = alignment::read_alignment(Path::new(&opts.file), &opts.format)?;
+    timing("read alignment", t0);
     let seq_type = alignment::detect_sequence_type(&aln)?;
     println!("{}", seq_type.message());
     let char_set = seq_type.char_set();
@@ -506,7 +542,9 @@ pub fn run(opts: &PruneOptions) -> Result<()> {
     let original_null = null.state.null.clone();
     let result = recursive_prune(&mut pruner, &enc, null)?;
 
+    let t0 = Instant::now();
     let files = output::write_all(opts, alg, &aln, &original_null, &result)?;
+    timing("write outputs", t0);
 
     let n_taxa = aln.nrows();
     let n_input = aln.ncols;
