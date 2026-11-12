@@ -29,6 +29,14 @@ Small inputs (committed, tests/data/):
 Large inputs (--large, not committed, tests/golden_large/data/):
   gtdb_n1000_c6000   T*L >= 5e6, so --num_workers_chisq > 1 changes the column
                      chunking (PLAN.md hazard H15)
+  gtdb_n20000_c2000  20,000 taxa x 2,000 evenly spaced columns. Above 15,625 taxa
+                     the column-block width is clamped at 16 (a block no longer
+                     fits Python's 2 MB budget) and rank selection uses its widest
+                     bucketing. The source has 12,944 taxa: all are kept, and
+                     7,056 synthetic taxa are added, each a copy of a source taxon
+                     with 15 % of its columns replaced by the residue another
+                     source taxon has in that column (so column compositions stay
+                     realistic).
 """
 
 import random
@@ -138,6 +146,32 @@ def make_dna_degenerate(out):
     write_fasta(out, recs)
 
 
+def spaced(n, total):
+    return [i * total // n for i in range(n)]
+
+
+def make_n20000(src, out):
+    headers, seqs = [], []
+    with open(src) as fh:
+        for line in fh:
+            if line.startswith(">"):
+                headers.append(line[1:].rstrip("\n"))
+            else:
+                seqs.append(line.rstrip("\n"))
+    cols = spaced(2000, len(seqs[0]))
+    seqs = ["".join(s[j] for j in cols) for s in seqs]
+    n_src, n_cols = len(seqs), len(cols)
+    rng = random.Random(20000)
+    recs = list(zip(headers, seqs))
+    for k in range(20000 - n_src):
+        base = (k * 7919) % n_src
+        s = list(seqs[base])
+        for j in rng.sample(range(n_cols), n_cols * 15 // 100):
+            s[j] = seqs[rng.randrange(n_src)][j]
+        recs.append((f"{headers[base]}_syn{k}", "".join(s)))
+    write_fasta(out, recs)
+
+
 def main():
     args = sys.argv[1:]
     large = "--large" in args
@@ -150,6 +184,7 @@ def main():
     if large:
         rows = [i * 12 for i in range(1000)]
         write_fasta(out / "gtdb_n1000_c6000.faa", subset(src, rows, 3000, 9000))
+        make_n20000(src, out / "gtdb_n20000_c2000.faa")
         return
     write_fasta(out / "gtdb_n20_c100.faa", subset(src, list(range(20)), 0, 100))
     write_fasta(out / "gtdb_n50_c500.faa", subset(src, list(range(50)), 0, 500))
