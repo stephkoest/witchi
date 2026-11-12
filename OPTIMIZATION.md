@@ -22,10 +22,19 @@ Measured single-thread costs used for the estimates (1,000 × 10,000, wasserstei
 
 ## Status
 
-Implemented: **T1, M2, M1**. With them, all parity suites pass: 33 + 3 + 9 goldens, 15
-intermediate cases, the I/O, formatting and RNG fixtures, and the full-MSA run (byte-identical to
-Python). New unit tests check the sorted-null count against the elementwise count, and the
-streamed delta-null against the materialized one, bit for bit.
+Implemented: **T1, M2, M1** (PR #10), then **T2**. With them, all parity suites pass:
+- the 33 + 3 + 9 goldens
+- the 15 intermediate cases
+- the I/O, formatting and RNG fixtures
+- the full-MSA run, byte-identical to Python
+
+Unit tests check, bit for bit:
+- the sorted-null count against the elementwise count
+- the streamed delta-null against the materialized one
+- rank selection against a full sort (adversarial value sets, forced bucketing at small sizes)
+- the Wasserstein reducer against the old sort-based reducer
+
+### T1, M2, M1
 
 Measured on the AMD EPYC 7402 (same runs as `bench/scaling.tsv`, old → new):
 
@@ -37,8 +46,23 @@ Measured on the AMD EPYC 7402 (same runs as `bench/scaling.tsv`, old → new):
 | 10,000 × 10,000 | 96 | 32.2 → 30.3 | 10,814 → 1,479 | |
 | Full MSA 12,944 × 13,540 | 32 | 16.4 → 16.7 | 4,269 → 1,050 | top_n 10, 20 permutations, cap 50 |
 
-Next by impact: T2 (selection instead of a full sort), T3 and T6 (kernel loop order and
-buffers), then the I/O memory items M3–M5.
+### T2
+
+Measured the same way (wall time; before → after T2):
+
+| Input | Threads | Wall (s) | Delta-null (s) | Prune iterations (s) |
+|---|---:|---|---|---|
+| 10,000 × 1,000 | 1 (20 perms, cap 20) | – | 12.0 → 7.8 | 7.98 → 3.97 |
+| 10,000 × 1,000 | 32 | 6.87 → 5.14 | 2.68 → 1.91 | 2.32 → 1.31 |
+| 10,000 × 10,000 | 32 | 44.6 → 29.4 | 24.2 → 15.7 | 13.5 → 6.8 |
+| 10,000 × 10,000 | 96 | 30.3 → 21.6 | 16.2 → 10.9 | 9.0 → 5.5 |
+| Full MSA 12,944 × 13,540 | 32 | 16.7 → 12.5 | 11.0 → 7.4 | 1.28 → 0.73 |
+
+Single-threaded, the squared algorithm (same kernel, no sort) takes 6.2 s and 2.2 s for those
+two stages on 10,000 × 1,000. So T2 removed about 70 % of Wasserstein's extra cost; most of
+what is left is the strided per-column gather (T3).
+
+Next by impact: T3 and T6 (kernel loop order and buffers), then the I/O memory items M3–M5.
 
 ## What breaks first at 200,000 × 40,000
 
@@ -155,18 +179,28 @@ per worker thread.
   [src/delta.rs:275](src/delta.rs:275).
 - **Now:** every column's T z-scores are fully sorted, but only 2 × 200 fixed ranks are
   read (`QuantilePlan` prev/next). The sort is most of the kernel.
-- **Change:** exact multi-selection. One pass for min and max, one pass to histogram the
-  values into a few thousand value-ordered buckets, then gather and sort only the
-  buckets that contain a needed rank. Fall back to the current sort when a NaN is
-  present or the range is degenerate. Also select on the raw per-row values and convert
-  only the selected ones to z-scores, which skips T subtractions and divisions per
-  column (valid when the scale is positive and finite; otherwise fall back).
-- **Identical because:** the value at a given sorted rank does not depend on how it is
-  found, and `(x − mean) / scale` with positive scale preserves order, so the selected
-  z-values are bit-for-bit the ones the full sort would give.
-- **Effect:** by estimate the sort is about 45 of the kernel's 60 or so ns per cell at
-  200,000 taxa; selection should cost about 5 ns. This speeds up both dominant stages (prune
-  iterations and delta-null).
+- **Done** (`npy::select_ranks`, `QuantilePlan::ranks` / `apply_ranked`):
+  - **Selection on raw values:** the reducer selects the plan's ranks on the raw per-row
+    values and converts only those to z-scores. This needs a finite mean and a positive,
+    finite scale; otherwise, or when a column holds NaN, it behaves as before.
+  - **Bucketing by bit pattern:** values are mapped to their total-order keys (the
+    integer order `f64::total_cmp` uses) and bucketed by the high bits of `key − min`.
+    The exponent sits in the high bits, so buckets adapt to skewed data. Value-range
+    buckets were tried first and were no faster than sorting on log-normal data.
+  - **Narrowing:** only buckets that contain a wanted rank are gathered, branch-free, and
+    refined the same way, or finished by partial selection. Two adjacent ranks (a
+    quantile's prev/next pair) cost one `select_nth_unstable` plus a minimum.
+- **Identical because:**
+  - The value at a given sorted rank does not depend on how it is found.
+  - Equal keys are identical bit patterns.
+  - `(x − mean) / scale` with a finite mean and a positive, finite scale preserves order,
+    including −0.0 before +0.0. So the selected z-values are bit-for-bit those of the full
+    sort.
+- **Effect:** at T = 10,000, about 57–70 µs per column instead of about 265 µs for the
+  sort (4–4.7×, `examples/select_bench.rs`).
+- **Weak spot:** a dense bulk with about 1 % far outliers takes 121 µs (2.2×). The
+  outliers stretch the first level's key range, so the bulk gets few buckets. Bounding
+  the first level by sample quantiles would fix this, if real data shows the pattern.
 
 ### T3. Delta kernel: iterate rows in the outer loop
 
