@@ -14,7 +14,7 @@ use crate::blas;
 use crate::chi2::{self, Encoded};
 use crate::npy::{self, QuantilePlan};
 use crate::permutation::{self, NullState, SEED_BASE};
-use crate::rng::Pcg64;
+use crate::rng::U32Stream;
 
 /// Pruning algorithm (`--pruning_algorithm`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -550,9 +550,7 @@ pub fn null_max_deltas(
 /// chunk here (num_workers 1) and the permuted array is C-ordered.
 fn null_max_delta(alg: Algorithm, enc: &Encoded, n_chars: usize, seed: u64, z: Option<&ZParams>) -> f64 {
     let t_n = enc.nrows;
-    let mut raw = vec![0i64; n_chars * t_n];
-    permutation::for_each_permuted_column(enc, seed, |_, col| chi2::add_column_counts(&mut raw, col, t_n));
-    let counts = chi2::fudge_counts(raw);
+    let counts = chi2::fudge_counts(permutation::permuted_counts(enc, n_chars, seed));
     let initial = {
         let e = chi2::expected_observed(&counts, n_chars, t_n);
         initial_score(alg, &e, &counts, n_chars, t_n, z)
@@ -561,7 +559,7 @@ fn null_max_delta(alg: Algorithm, enc: &Encoded, n_chars: usize, seed: u64, z: O
     let plan = plan_for(alg, z, t_n);
     let reducer = Reducer::new(alg, z, plan.as_ref());
 
-    let mut rng = Pcg64::from_seed(seed);
+    let mut rng = U32Stream::from_seed(seed);
     let mut buf = vec![0i8; t_n * block_width(t_n).min(enc.ncols)];
     // Python's max(): first value, then strictly greater (NaN-sticky).
     let mut best: Option<f64> = None;

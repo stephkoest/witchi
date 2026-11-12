@@ -5,7 +5,7 @@ use rayon::prelude::*;
 
 use crate::chi2::{self, Encoded};
 use crate::npy;
-use crate::rng::Pcg64;
+use crate::rng::U32Stream;
 
 /// Base seed used by WitChi: permutation `i` uses `12345 + i`.
 pub const SEED_BASE: u64 = 12345;
@@ -14,7 +14,7 @@ pub const SEED_BASE: u64 = 12345;
 /// one with a single generator seeded by `seed`, in column order
 /// (`np.apply_along_axis(default_rng(seed).permutation, 0, a)`).
 pub fn for_each_permuted_column(enc: &Encoded, seed: u64, mut visit: impl FnMut(usize, &[i8])) {
-    let mut rng = Pcg64::from_seed(seed);
+    let mut rng = U32Stream::from_seed(seed);
     let mut col = vec![0i8; enc.nrows];
     for j in 0..enc.ncols {
         col.copy_from_slice(enc.column(j));
@@ -32,11 +32,54 @@ pub fn permuted(enc: &Encoded, seed: u64) -> Encoded {
     Encoded::from_codes(codes, enc.nrows, enc.ncols)
 }
 
+/// Columns shuffled and counted together by [`permuted_counts`].
+const COUNT_BATCH: usize = 32;
+
+/// Raw (C, T) residue counts of the alignment permuted with `seed` (the
+/// columns of `np.apply_along_axis(default_rng(seed).permutation, 0, a)`),
+/// without materializing it.
+///
+/// Columns are shuffled in order with one generator, a batch at a time, and
+/// each batch is added to a taxon-major (T, C + 1) table in one sequential
+/// sweep (slot 0 takes codes outside the char set). Counts are integers, so
+/// the result equals counting column by column.
+pub fn permuted_counts(enc: &Encoded, n_chars: usize, seed: u64) -> Vec<i64> {
+    let t_n = enc.nrows;
+    let w = n_chars + 1;
+    let mut counts = vec![0i64; n_chars * t_n];
+    if t_n == 0 {
+        return counts;
+    }
+    let mut rng = U32Stream::from_seed(seed);
+    let mut batch = vec![0i8; COUNT_BATCH.min(enc.ncols) * t_n];
+    let mut table = vec![0u32; t_n * w];
+    let mut j = 0;
+    while j < enc.ncols {
+        let nb = COUNT_BATCH.min(enc.ncols - j);
+        let batch = &mut batch[..nb * t_n];
+        for (k, slot) in batch.chunks_exact_mut(t_n).enumerate() {
+            slot.copy_from_slice(enc.column(j + k));
+            rng.shuffle(slot);
+        }
+        for t in 0..t_n {
+            let row = &mut table[t * w..(t + 1) * w];
+            for k in 0..nb {
+                row[(batch[k * t_n + t] as isize + 1) as usize] += 1;
+            }
+        }
+        j += nb;
+    }
+    for t in 0..t_n {
+        for c in 0..n_chars {
+            counts[c * t_n + t] = table[t * w + c + 1] as i64;
+        }
+    }
+    counts
+}
+
 /// Per-taxon chi^2 of one permuted alignment.
 pub fn permuted_row_chi2(enc: &Encoded, n_chars: usize, seed: u64) -> Vec<f64> {
-    let mut counts = vec![0i64; n_chars * enc.nrows];
-    for_each_permuted_column(enc, seed, |_, col| chi2::add_column_counts(&mut counts, col, enc.nrows));
-    let counts = chi2::fudge_counts(counts);
+    let counts = chi2::fudge_counts(permuted_counts(enc, n_chars, seed));
     let e = chi2::expected_observed(&counts, n_chars, enc.nrows);
     chi2::row_chi2(&e, &counts, n_chars, enc.nrows)
 }
@@ -203,7 +246,38 @@ pub fn biased_taxa_threshold(pooled: &[f64], n_taxa: usize) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::SortedNull;
+    use super::*;
+
+    #[test]
+    fn permuted_counts_match_column_by_column_reference() {
+        use crate::rng::Pcg64;
+        let n_chars = 20;
+        for &(t_n, ncols) in &[(1usize, 5usize), (7, 31), (50, 32), (50, 33), (333, 100), (1000, 65)] {
+            let mut state = 0x853c_49e6_748f_ea9bu64 ^ (t_n * 31 + ncols) as u64;
+            let codes: Vec<i8> = (0..t_n * ncols)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    let r = (state >> 40) % 23;
+                    if r >= 20 { -1 } else { r as i8 }
+                })
+                .collect();
+            let enc = Encoded::from_codes(codes, t_n, ncols);
+            for seed in [SEED_BASE, SEED_BASE + 7, SEED_BASE + 1000] {
+                // Reference: numpy's draw-by-draw shuffle, one column at a time.
+                let mut rng = Pcg64::from_seed(seed);
+                let mut want = vec![0i64; n_chars * t_n];
+                let mut col = vec![0i8; t_n];
+                for j in 0..ncols {
+                    col.copy_from_slice(enc.column(j));
+                    rng.shuffle(&mut col);
+                    chi2::add_column_counts(&mut want, &col, t_n);
+                }
+                assert_eq!(permuted_counts(&enc, n_chars, seed), want, "T {t_n}, L {ncols}, seed {seed}");
+            }
+        }
+    }
 
     #[test]
     fn sorted_null_counts_like_elementwise_ge() {
