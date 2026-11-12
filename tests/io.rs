@@ -20,7 +20,8 @@ fn describe(path: &Path) -> String {
         Err(_) => "detect-error".to_string(),
     };
     let mut out = format!("OK {kind}\n").into_bytes();
-    render_fasta(&aln.records, (0..aln.nrows()).map(|t| aln.row(t)), &mut out);
+    let rows: Vec<Vec<u8>> = (0..aln.nrows()).map(|t| aln.row(t)).collect();
+    render_fasta(&aln.records, rows.iter().map(Vec::as_slice), &mut out);
     String::from_utf8(out).unwrap()
 }
 
