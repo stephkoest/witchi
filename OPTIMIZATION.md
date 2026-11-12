@@ -23,7 +23,8 @@ Measured single-thread costs used for the estimates (1,000 × 10,000, wasserstei
 ## Status
 
 Implemented: **T1, M2, M1** (PR #10), **T2** (PR #11), **T3 and T6** (PR #12), **T4** (PR #13),
-then **M3, M4, M5 and T5**. With them, all parity suites pass:
+**M3, M4, M5 and T5** (PR #14), then the main part of **T7**. **T8** was measured and left out
+(no gain). With them, all parity suites pass:
 - the 33 + 3 + 9 goldens
 - the 15 intermediate cases
 - the I/O, formatting and RNG fixtures
@@ -125,7 +126,32 @@ thread at 200,000 taxa. Each permutation in flight holds:
 - the kernel's two T × b blocks
 - the counting batch and table
 
-Next by impact: T7 (parallelism gaps), then T8 (build flags).
+### T7 (segmented permutations) and T8
+
+**T7.** Measured on the full MSA (20 permutations, 32 threads), alternating the binaries,
+three runs each:
+- **Delta-null:** 5.7–6.4 s → 4.5–4.9 s.
+- **Null matrix:** 1.75 s → 1.3 s in two of three runs.
+
+With 8 permutations on 8 threads (one segment), both stages are unchanged.
+
+The 18 benchmark configurations on 10,000 taxa keep their checksums. Their timings were
+taken while the machine's load average rose to 50, so they are only indicative: on
+10,000 × 10,000 at 96 threads, delta-null 8.5 → 6.8 s and wall 16.3 → 14.5 s.
+
+**T8.** Four builds were compared, at 4 threads (best of 3) and on the full MSA:
+- the current settings
+- `lto = "fat"` with `codegen-units = 1`
+- that plus `-C target-cpu=x86-64-v3`
+- that plus `-C target-cpu=native`
+
+All gave the same output checksums. No variant was measurably faster: wasserstein took
+3.02–3.11 s with every build, and on squared the current build was fastest. The hot paths
+are OpenBLAS, memory-bound sweeps and code already written for the CPU's strengths. The
+release profile is left as it is.
+
+Remaining T7 items, not done: few blocks at moderate taxon counts, and serial summaries.
+Neither matters at the target size (see T7).
 
 ## What breaks first at 200,000 × 40,000
 
@@ -398,6 +424,33 @@ per worker thread.
   [src/npy.rs:102](src/npy.rs:102)) and takes two medians. One shared sorted copy serves
   the quantiles, the threshold and T1. Seconds, not minutes.
 - **Identical because:** results are collected in index order in every case.
+- **Done: the permutation gap**, for the null matrix and the delta-null.
+  - **Why it mattered:** each permutation ran on one thread. With P permutations on N
+    threads, the last of ceil(P / N) rounds leaves threads idle. 100 permutations on
+    96 threads ran in two rounds, the second with 4 permutations (about 52 % efficiency),
+    and 20 permutations on 32 threads used only 20.
+  - **How:** each permutation can now be split into column segments that run in
+    parallel. A segment needs the random stream at its first column. A column's shuffle
+    consumes a number of draws that depends only on the draws and the column length, so
+    a draws-only pass finds each segment's position: `U32Stream::skip_shuffle`, about
+    2.5 ns per cell against 4.4 ns for the shuffle. The segment then jumps its own PCG64
+    there: `Pcg64::advance`, the standard O(log n) LCG jump-ahead (numpy's `advance`),
+    and `U32Stream::at`.
+  - **Combining:** counts are summed across segments. The delta-null's per-column
+    deltas are concatenated in order, and Python's `max()` is taken over the whole list.
+  - **Choosing the number of segments:** `segment_count` estimates the makespan
+    `ceil(P * n / threads) * cost / n + skip` for n = 1..64 and picks the minimum, with
+    per-cell costs of about 50 ns (delta-null), 6 ns (null matrix) and 2.5 ns (draws-only
+    pass). With enough permutations per thread it stays at 1, the previous code path.
+  - **Identical because:** every column is shuffled with exactly the draws of the
+    sequential pass, and the results are combined in column order.
+  - **Pitfall found:** the first version put the counting loop in a closure. It ran
+    about 40 % slower, because sizes captured by reference were reloaded in the hot loop
+    and blocked optimization. A plain function restores the old speed.
+- **Not done:**
+  - Parallelizing inside a block at moderate taxon counts: irrelevant at the target
+    size, where there are 2,500 blocks.
+  - A shared sorted null for the summaries: about seconds at P × T = 20 million.
 
 ### T8. Build settings
 
@@ -409,6 +462,7 @@ per worker thread.
   processed.
 - **Effect:** a few percent to perhaps 20 % on the integer and element-wise loops. The
   v3 baseline needs AVX2 (any CPU that runs the Haswell/Zen OpenBLAS kernels has it).
+- **Measured: no gain**, and the output is identical (see Status). Not adopted.
 
 ## Looked at and left alone
 
@@ -428,7 +482,7 @@ per worker thread.
 2. T2, T3, T6 — the kernel; verify against `tests/intermediates` and the goldens (done).
 3. T4 (done).
 4. M3, M4, M5, T5 — the I/O path, done together because they share the storage change (done).
-5. T7, T8.
+5. T7 (permutation segmentation done), T8 (measured, no gain).
 
 The existing parity suite (33 + 9 goldens, 15 intermediate dumps, the large tier and the
 full-MSA reference) is the safety net for each step. Add a golden with more than 15,625

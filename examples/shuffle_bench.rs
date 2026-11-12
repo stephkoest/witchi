@@ -33,7 +33,13 @@ fn main() {
             stream.shuffle(&mut work);
         }
         let fast = t0.elapsed().as_secs_f64() / (cols * t_n) as f64;
-        println!("T {t_n:7}: stream shuffle {:.2} ns/cell", fast * 1e9);
+        let mut skipper = U32Stream::from_seed(12345);
+        let t0 = Instant::now();
+        for _ in 0..cols {
+            skipper.skip_shuffle(t_n);
+        }
+        let skip = t0.elapsed().as_secs_f64() / (cols * t_n) as f64;
+        println!("T {t_n:7}: stream shuffle {:.2} ns/cell, skip (draws only) {:.2} ns/cell", fast * 1e9, skip * 1e9);
         let mut counts = vec![0i64; c_n * t_n];
         let t0 = Instant::now();
         for _ in 0..cols {
