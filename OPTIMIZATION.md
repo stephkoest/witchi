@@ -22,7 +22,8 @@ Measured single-thread costs used for the estimates (1,000 × 10,000, wasserstei
 
 ## Status
 
-Implemented: **T1, M2, M1** (PR #10), then **T2**. With them, all parity suites pass:
+Implemented: **T1, M2, M1** (PR #10), **T2** (PR #11), then **T3 and T6**. With them, all parity
+suites pass:
 - the 33 + 3 + 9 goldens
 - the 15 intermediate cases
 - the I/O, formatting and RNG fixtures
@@ -33,6 +34,8 @@ Unit tests check, bit for bit:
 - the streamed delta-null against the materialized one
 - rank selection against a full sort (adversarial value sets, forced bucketing at small sizes)
 - the Wasserstein reducer against the old sort-based reducer
+- the column-major kernel and reducers against the old row-major ones (all algorithms,
+  C- and F-ordered blocks, widths 1–37, row counts across the 128-row tile)
 
 ### T1, M2, M1
 
@@ -62,7 +65,27 @@ Single-threaded, the squared algorithm (same kernel, no sort) takes 6.2 s and 2.
 two stages on 10,000 × 1,000. So T2 removed about 70 % of Wasserstein's extra cost; most of
 what is left is the strided per-column gather (T3).
 
-Next by impact: T3 and T6 (kernel loop order and buffers), then the I/O memory items M3–M5.
+### T3 and T6
+
+None of the parity inputs exceeds 15,625 taxa, so these were also timed on a synthetic
+51,776 × 2,000 input: the full MSA stacked four times, 2,000 evenly spaced columns,
+20 permutations, cap 10, 32 threads. The output files are byte-identical to the T2
+binary for all three algorithms.
+
+| Input | Algorithm | Wall (s) | Delta-null (s) | Prune iterations (s) |
+|---|---|---|---|---|
+| 51,776 × 2,000 | wasserstein | 12.7 → 11.1 | 6.3 → 5.5 | 2.2 → 1.5 |
+| 51,776 × 2,000 | squared | 16.2 → 11.2 | 9.0 → 5.1 | 3.0 → 1.4 |
+| 51,776 × 2,000 | quartic | 17.0 → 10.3 | 10.0 → 5.0 | 2.8 → 1.3 |
+| 10,000 × 10,000 (32 threads) | wasserstein | 29.4 → 26.7 | 15.7 → 14.4 | 6.8 → 5.6 |
+| 10,000 × 10,000 (96 threads) | wasserstein | 21.6 → 19.1 | 10.9 → 9.5 | 5.5 → 4.5 |
+| Full MSA 12,944 × 13,540 | wasserstein | 12.5 → 12.1 | 7.4 → 7.2 | 0.73 → 0.59 |
+
+Next by impact:
+- T4: the shuffle now dominates the null matrix and a large share of the delta-null,
+  which shuffles every column twice.
+- The memory items M3–M5, which the target size needs.
+- T7.
 
 ## What breaks first at 200,000 × 40,000
 
@@ -212,14 +235,26 @@ per worker thread.
   width is clamped at 16, so beyond about 15,600 taxa a block no longer fits: at
   200,000 taxa each block is 25.6 MB and is swept 16 times for the combine step and 16
   more for the reduce.
-- **Change:** loop over taxa outside and columns inside; keep a (T, C) copy of the
-  counts for the per-row lookup; write the result column-major so the reduce reads each
-  column contiguously. Leave the BLAS call and the block boundaries exactly as they are.
-- **Identical because:** each output element is computed by the same expression from the
-  same inputs; only the order in which independent elements are visited changes. The
-  degenerate-column mask is an OR, which is order-independent.
-- **Effect:** memory traffic per block drops from about 1.2 GB to under 0.2 GB. This
-  only shows above about 15,600 taxa, so the current benchmark does not see it.
+- **Done:**
+  - **Output:** the per-row block is written column-major (`per_row[k * T + t]`).
+  - **Main loop:** it runs in tiles of 128 rows, so the strided reads of the BLAS
+    product stay in cache while each column is written contiguously.
+  - **Reducers:**
+    - Wasserstein selects directly on a contiguous column slice, without copying it.
+    - The pairwise sums read the slice.
+    - The sequential sums run 8 columns side by side, each still adding rows in order
+      t = 0, 1, ….
+  - **Per-column counts:** an integer histogram, giving the same small-integer f64
+    values as before.
+  - **Unchanged:** the BLAS call and the block boundaries.
+- **Identical because:**
+  - Each element is computed by the same expression from the same inputs.
+  - Each column's sum adds the same values in the same order as numpy's axis-0
+    reduction of the row-major block.
+  - The degenerate-column mask is an OR.
+- **Effect:** at 51,776 taxa, about 2× on the kernel stages for squared and quartic, and
+  about 1.4× on Wasserstein's pruning iterations. At 10,000 taxa, 8–12 % on wall time.
+  See Status.
 
 ### T4. Shuffle: remove the unpredictable branches, batch the counting
 
@@ -259,11 +294,12 @@ per worker thread.
 - **Where:** `per_row_block` and `reduce` allocate and zero their work arrays on every
   block ([src/delta.rs:162](src/delta.rs:162)): two 25.6 MB arrays per block at 200,000
   taxa, across all threads.
-- **Change:** per-thread scratch (rayon `map_init`), no zeroing where every element is
-  overwritten.
-- **Identical because:** buffers are fully written before they are read.
-- **Effect:** probably 5–10 % of kernel time, and less page-fault contention at high
-  thread counts.
+- **Done:** a thread-local `KernelScratch` holds the block and reducer buffers, and the
+  selection scratch, for the life of the thread. The BLAS output is still zero-filled
+  before the call, as the freshly allocated array was.
+- **Identical because:** every buffer is fully rewritten before it is read.
+- **Effect:** measured together with T3 (see Status). Peak RSS is unchanged: each thread
+  keeps about 2 × T × b × 8 bytes, which it already needed while processing a block.
 
 ### T7. Parallelism gaps
 
@@ -306,8 +342,8 @@ per worker thread.
 
 ## Suggested order
 
-1. T1, M2, M1 — small, contained, and they remove the hard blockers.
-2. T2, T3, T6 — the kernel; verify against `tests/intermediates` and the goldens.
+1. T1, M2, M1 — small, contained, and they remove the hard blockers (done).
+2. T2, T3, T6 — the kernel; verify against `tests/intermediates` and the goldens (done).
 3. M3, M4, M5, T5 — the I/O path, done together because they share the storage change.
 4. T4, T7, T8.
 

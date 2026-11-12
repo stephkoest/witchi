@@ -158,56 +158,119 @@ impl Base {
         Base { t_n, n_chars, cr, u, total_chars, n_total, col_totals }
     }
 
-    /// `_per_row_chi2_block`: per-row chi^2 (T x b, row-major) after removing
-    /// each block column (`cols`, the block's b encoded columns in order), plus
-    /// the degenerate-column mask.
-    fn per_row_block(&self, cols: &[&[i8]]) -> (Vec<f64>, Vec<bool>) {
+    /// `_per_row_chi2_block`: per-row chi^2 after removing each block column
+    /// (`cols`, the block's b encoded columns in order), written to
+    /// `sc.per_row` **column-major** (`per_row[k * T + t]`), plus the
+    /// degenerate-column mask in `sc.zero_mask`.
+    ///
+    /// Every element is computed by the same expression from the same inputs
+    /// as Python's (T x b) block; only the storage order differs, which the
+    /// reducers account for. The BLAS call is unchanged.
+    fn per_row_block(&self, cols: &[&[i8]], sc: &mut BlockScratch) {
         let (c_n, t_n, b) = (self.n_chars, self.t_n, cols.len());
-        let mut count_at_col = vec![0.0f64; c_n * b];
-        let mut n_nongap = vec![0.0f64; b];
-        for k in 0..b {
-            for &code in cols[k] {
-                if code >= 0 {
-                    count_at_col[code as usize * b + k] += 1.0;
-                    n_nongap[k] += 1.0;
-                }
+        let BlockScratch { count_at_col, n_nongap, inv_gf, a, per_row, zero_mask, hist } = sc;
+
+        // Per-column residue counts (small integers, so exact as f64).
+        count_at_col.clear();
+        count_at_col.resize(c_n * b, 0.0);
+        n_nongap.clear();
+        n_nongap.resize(b, 0.0);
+        for (k, col) in cols.iter().enumerate() {
+            // hist[0] counts codes outside the char set (-1), hist[c + 1] code c.
+            hist.clear();
+            hist.resize(c_n + 1, 0);
+            for &code in col.iter() {
+                hist[(code as isize + 1) as usize] += 1;
             }
+            for c in 0..c_n {
+                count_at_col[c * b + k] = hist[c + 1] as f64;
+            }
+            n_nongap[k] = (t_n - hist[0] as usize) as f64;
         }
-        let n_j: Vec<f64> = n_nongap.iter().map(|&v| self.n_total - v).collect();
-        let mut zero_mask = vec![false; b];
-        let mut inv_gf = vec![0.0f64; c_n * b];
+        zero_mask.clear();
+        zero_mask.resize(b, false);
+        inv_gf.clear();
+        inv_gf.resize(c_n * b, 0.0);
         for c in 0..c_n {
             for k in 0..b {
+                let n_j = self.n_total - n_nongap[k];
                 let tc = self.total_chars[c] - count_at_col[c * b + k];
                 if tc <= 0.0 {
                     zero_mask[k] = true;
                 }
                 let safe = if tc > 0.0 { tc } else { 1.0 };
-                inv_gf[c * b + k] = n_j[k] / safe;
+                inv_gf[c * b + k] = n_j / safe;
             }
         }
-        let mut a = vec![0.0f64; t_n * b];
-        blas::ut_times(&self.u, &inv_gf, c_n, t_n, b, &mut a);
-        let mut per_row = vec![0.0f64; t_n * b];
-        for k in 0..b {
-            let col = cols[k];
-            for t in 0..t_n {
-                let code = col[t];
-                let nongap = if code >= 0 { 1.0 } else { 0.0 };
-                let cs = if code >= 0 { code as usize } else { 0 };
-                let ct = self.col_totals[t] - nongap;
-                if ct <= 0.0 {
-                    zero_mask[k] = true;
+        // A = U^T inv_gf, (T x b) row-major, exactly as numpy computes it. The
+        // output starts zeroed, as the freshly allocated array did.
+        a.clear();
+        a.resize(t_n * b, 0.0);
+        blas::ut_times(&self.u, inv_gf, c_n, t_n, b, a);
+
+        // Row tiles keep the strided reads of A in cache while each column of
+        // the output is written contiguously.
+        const TILE: usize = 128;
+        per_row.clear();
+        per_row.resize(t_n * b, 0.0);
+        let mut t0 = 0;
+        while t0 < t_n {
+            let t1 = (t0 + TILE).min(t_n);
+            for (k, col) in cols.iter().enumerate() {
+                let out = &mut per_row[k * t_n..(k + 1) * t_n];
+                let mut zero = false;
+                for t in t0..t1 {
+                    let code = col[t];
+                    let nongap = if code >= 0 { 1.0 } else { 0.0 };
+                    let cs = if code >= 0 { code as usize } else { 0 };
+                    let ct = self.col_totals[t] - nongap;
+                    zero |= ct <= 0.0;
+                    let inv_at = inv_gf[cs * b + k];
+                    let cr_at = self.cr[cs * t_n + t];
+                    let s = a[t * b + k] + nongap * (1.0 - 2.0 * cr_at) * inv_at;
+                    let safe_ct = if ct > 0.0 { ct } else { 1.0 };
+                    out[t] = s / safe_ct - ct;
                 }
-                let inv_at = inv_gf[cs * b + k];
-                let cr_at = self.cr[cs * t_n + t];
-                let s = a[t * b + k] + nongap * (1.0 - 2.0 * cr_at) * inv_at;
-                let safe_ct = if ct > 0.0 { ct } else { 1.0 };
-                per_row[t * b + k] = s / safe_ct - ct;
+                zero_mask[k] |= zero;
             }
+            t0 = t1;
         }
-        (per_row, zero_mask)
     }
+}
+
+/// Reusable buffers of the block kernel ([`Base::per_row_block`]).
+#[derive(Default)]
+struct BlockScratch {
+    count_at_col: Vec<f64>,
+    n_nongap: Vec<f64>,
+    inv_gf: Vec<f64>,
+    a: Vec<f64>,
+    per_row: Vec<f64>,
+    zero_mask: Vec<bool>,
+    hist: Vec<u32>,
+}
+
+/// Reusable buffers of [`Reducer::reduce`].
+#[derive(Default)]
+struct ReduceScratch {
+    col: Vec<f64>,
+    obs: Vec<f64>,
+    diffs: Vec<f64>,
+    at_ranks: Vec<f64>,
+    select: npy::SelectScratch,
+}
+
+/// Per-thread kernel buffers, so blocks do not allocate (and page-fault) large
+/// arrays every time. Every buffer is fully rewritten before it is read.
+#[derive(Default)]
+struct KernelScratch {
+    block: BlockScratch,
+    reduce: ReduceScratch,
+}
+
+thread_local! {
+    static KERNEL_SCRATCH: std::cell::RefCell<KernelScratch> =
+        std::cell::RefCell::new(KernelScratch::default());
 }
 
 /// The per-block reduction of the active algorithm.
@@ -246,41 +309,57 @@ impl<'a> Reducer<'a> {
         }
     }
 
-    /// Reduce a (T x b) row-major block to b values with numpy's operation
-    /// order: axis-0 sums are sequential over rows when the block is C-ordered
-    /// with b > 1, and pairwise per column when the reduced axis is contiguous
-    /// (b == 1, or an F-ordered block). Wasserstein is layout-independent
-    /// (np.quantile works on a C-ordered copy).
-    fn reduce(&self, per_row: &[f64], t_n: usize, b: usize, fortran: bool) -> Vec<f64> {
+    /// Reduce a block of b columns of T per-row values, stored column-major
+    /// (`per_row[k * T + t]`), to b values with numpy's operation order for
+    /// Python's (T x b) block: axis-0 sums are sequential over rows (t = 0, 1,
+    /// ...) when that block is C-ordered with b > 1, and pairwise per column
+    /// when the reduced axis is contiguous (b == 1, or an F-ordered block).
+    /// Wasserstein is layout-independent (np.quantile works on a copy).
+    fn reduce(&self, per_row: &[f64], t_n: usize, b: usize, fortran: bool, sc: &mut ReduceScratch) -> Vec<f64> {
+        debug_assert_eq!(per_row.len(), t_n * b);
+        let column = |k: usize| &per_row[k * t_n..(k + 1) * t_n];
         match *self {
             Reducer::Sum | Reducer::SumOfSquares => {
                 let sq = matches!(self, Reducer::SumOfSquares);
                 let f = |x: f64| if sq { x * x } else { x };
                 if b == 1 || fortran {
-                    let mut col = vec![0.0f64; t_n];
                     return (0..b)
                         .map(|k| {
-                            for t in 0..t_n {
-                                col[t] = f(per_row[t * b + k]);
+                            if sq {
+                                sc.col.clear();
+                                sc.col.extend(column(k).iter().map(|&x| x * x));
+                                npy::pairwise_sum(&sc.col)
+                            } else {
+                                npy::pairwise_sum(column(k))
                             }
-                            npy::pairwise_sum(&col)
                         })
                         .collect();
                 }
-                let mut acc: Vec<f64> = per_row[..b].iter().map(|&x| f(x)).collect();
-                for t in 1..t_n {
-                    let row = &per_row[t * b..(t + 1) * b];
-                    for k in 0..b {
-                        acc[k] += f(row[k]);
+                // Sequential over rows for each column: acc = f(x0); acc += f(x1);
+                // ... Columns are independent, so 8 run side by side.
+                let mut out = vec![0.0f64; b];
+                for k0 in (0..b).step_by(8) {
+                    let k1 = (k0 + 8).min(b);
+                    let mut acc = [0.0f64; 8];
+                    for k in k0..k1 {
+                        acc[k - k0] = f(per_row[k * t_n]);
                     }
+                    for t in 1..t_n {
+                        for k in k0..k1 {
+                            acc[k - k0] += f(per_row[k * t_n + t]);
+                        }
+                    }
+                    out[k0..k1].copy_from_slice(&acc[..k1 - k0]);
                 }
-                acc
+                out
             }
             Reducer::WassersteinZ { z, plan } => {
                 let kq = z.quantiles.len();
-                let mut col = vec![0.0f64; t_n];
-                let mut obs = vec![0.0f64; kq];
-                let mut diffs = vec![0.0f64; kq];
+                let ReduceScratch { col, obs, diffs, at_ranks, select } = sc;
+                obs.clear();
+                obs.resize(kq, 0.0);
+                diffs.clear();
+                diffs.resize(kq, 0.0);
                 // Fast path: x -> (x - mean) / scale is monotone (also in total
                 // order, -0.0 before +0.0) when mean is finite and scale is
                 // positive and finite, and maps NaN, and only NaN, to NaN. So
@@ -289,39 +368,33 @@ impl<'a> Reducer<'a> {
                 // transform only those.
                 let monotone = z.mean.is_finite() && z.scale.is_finite() && z.scale > 0.0;
                 let ranks = plan.ranks();
-                let mut at_ranks = vec![0.0f64; ranks.len()];
-                let mut scratch = npy::SelectScratch::default();
+                at_ranks.clear();
+                at_ranks.resize(ranks.len(), 0.0);
                 (0..b)
                     .map(|k| {
+                        let x = column(k);
                         if monotone {
-                            let mut has_nan = false;
-                            for t in 0..t_n {
-                                let x = per_row[t * b + k];
-                                has_nan |= x.is_nan();
-                                col[t] = x;
-                            }
-                            if has_nan {
+                            if x.iter().any(|v| v.is_nan()) {
                                 // np.quantile of an array holding NaN is all NaN.
                                 obs.fill(f64::NAN);
                             } else {
-                                npy::select_ranks(&col, ranks, &mut at_ranks, &mut scratch);
+                                npy::select_ranks(x, ranks, at_ranks, select);
                                 for v in at_ranks.iter_mut() {
                                     *v = (*v - z.mean) / z.scale;
                                 }
-                                plan.apply_ranked(&at_ranks, &mut obs);
+                                plan.apply_ranked(at_ranks, obs);
                             }
                         } else {
-                            for t in 0..t_n {
-                                col[t] = (per_row[t * b + k] - z.mean) / z.scale;
-                            }
-                            npy::sort_nan_last(&mut col);
-                            plan.apply_sorted(&col, &mut obs);
+                            col.clear();
+                            col.extend(x.iter().map(|&v| (v - z.mean) / z.scale));
+                            npy::sort_nan_last(col);
+                            plan.apply_sorted(col, obs);
                         }
                         for i in 0..kq {
                             diffs[i] = (obs[i] - z.quantiles[i]).abs();
                         }
                         let total = if b == 1 {
-                            npy::pairwise_sum(&diffs)
+                            npy::pairwise_sum(diffs)
                         } else {
                             let mut s = diffs[0];
                             for d in &diffs[1..] {
@@ -356,19 +429,32 @@ fn block_scores(
     alignment_fortran: bool,
 ) -> Vec<f64> {
     let (t_n, b) = (base.t_n, cols.len());
-    let (per_row, zero) = base.per_row_block(cols);
     let fortran = per_row_block_is_fortran(alignment_fortran, t_n, b);
-    let mut vals = reducer.reduce(&per_row, t_n, b, fortran);
-    for (k, &is_zero) in zero.iter().enumerate() {
-        if is_zero {
-            vals[k] = degenerate_score(reducer, counts, base.n_chars, t_n, cols[k]);
+    // Nothing below re-enters the kernel or yields to rayon, so the borrow
+    // of this thread's scratch is never contended.
+    KERNEL_SCRATCH.with(|cell| {
+        let mut guard = cell.borrow_mut();
+        let KernelScratch { block, reduce } = &mut *guard;
+        base.per_row_block(cols, block);
+        let mut vals = reducer.reduce(&block.per_row, t_n, b, fortran, reduce);
+        for (k, &is_zero) in block.zero_mask.iter().enumerate() {
+            if is_zero {
+                vals[k] = degenerate_score(reducer, counts, base.n_chars, t_n, cols[k], reduce);
+            }
         }
-    }
-    vals
+        vals
+    })
 }
 
 /// Direct recomputation of the score without one column.
-fn degenerate_score(reducer: &Reducer, counts: &[i64], n_chars: usize, t_n: usize, col: &[i8]) -> f64 {
+fn degenerate_score(
+    reducer: &Reducer,
+    counts: &[i64],
+    n_chars: usize,
+    t_n: usize,
+    col: &[i8],
+    sc: &mut ReduceScratch,
+) -> f64 {
     let mut cc = counts.to_vec();
     for (ti, &code) in col.iter().enumerate() {
         if code >= 0 {
@@ -377,7 +463,8 @@ fn degenerate_score(reducer: &Reducer, counts: &[i64], n_chars: usize, t_n: usiz
     }
     let e = chi2::expected_observed(&cc, n_chars, t_n);
     let per_row = chi2::row_chi2(&e, &cc, n_chars, t_n);
-    reducer.reduce(&per_row, t_n, 1, false)[0]
+    // A single column: row- and column-major are the same.
+    reducer.reduce(&per_row, t_n, 1, false, sc)[0]
 }
 
 /// Delta score per column: `initial - score_without_column_j`
@@ -531,7 +618,7 @@ mod tests {
         let kq = z.quantiles.len();
         (0..b)
             .map(|k| {
-                let mut col: Vec<f64> = (0..t_n).map(|t| (per_row[t * b + k] - z.mean) / z.scale).collect();
+                let mut col: Vec<f64> = (0..t_n).map(|t| (per_row[k * t_n + t] - z.mean) / z.scale).collect();
                 npy::sort_nan_last(&mut col);
                 let mut obs = vec![0.0; kq];
                 plan.apply_sorted(&col, &mut obs);
@@ -563,10 +650,10 @@ mod tests {
                 })
                 .collect();
             if b > 1 {
-                // A column with NaN, and infinities in another.
-                per_row[3 * b + 1] = f64::NAN;
-                per_row[5 * b] = f64::INFINITY;
-                per_row[9 * b] = f64::NEG_INFINITY;
+                // A column with NaN, and infinities in another (column-major).
+                per_row[t_n + 3] = f64::NAN;
+                per_row[5] = f64::INFINITY;
+                per_row[9] = f64::NEG_INFINITY;
             }
             let quantiles: Vec<f64> = {
                 let mut q: Vec<f64> = (0..200).map(|_| unit() * 4.0 - 2.0).collect();
@@ -577,10 +664,126 @@ mod tests {
                 let z = ZParams { mean, scale, quantiles: quantiles.clone(), plan_cache: None };
                 let plan = z.plan(t_n);
                 let reducer = Reducer::WassersteinZ { z: &z, plan: &plan };
-                let got = reducer.reduce(&per_row, t_n, b, false);
+                let got = reducer.reduce(&per_row, t_n, b, false, &mut ReduceScratch::default());
                 let want = wasserstein_by_full_sort(&per_row, t_n, b, &z, &plan);
                 for (k, (g, w)) in got.iter().zip(&want).enumerate() {
                     assert_eq!(g.to_bits(), w.to_bits(), "T {t_n}, b {b}, col {k}, mean {mean}, scale {scale}");
+                }
+            }
+        }
+    }
+
+    /// The kernel as it was before T3/T6: row-major (T x b) block, fresh
+    /// buffers, reducers reading rows. Kept verbatim as the reference.
+    fn old_block_scores(base: &Base, reducer: &Reducer, cols: &[&[i8]], fortran: bool) -> (Vec<f64>, Vec<bool>) {
+        let (c_n, t_n, b) = (base.n_chars, base.t_n, cols.len());
+        let mut count_at_col = vec![0.0f64; c_n * b];
+        let mut n_nongap = vec![0.0f64; b];
+        for k in 0..b {
+            for &code in cols[k] {
+                if code >= 0 {
+                    count_at_col[code as usize * b + k] += 1.0;
+                    n_nongap[k] += 1.0;
+                }
+            }
+        }
+        let n_j: Vec<f64> = n_nongap.iter().map(|&v| base.n_total - v).collect();
+        let mut zero_mask = vec![false; b];
+        let mut inv_gf = vec![0.0f64; c_n * b];
+        for c in 0..c_n {
+            for k in 0..b {
+                let tc = base.total_chars[c] - count_at_col[c * b + k];
+                if tc <= 0.0 {
+                    zero_mask[k] = true;
+                }
+                let safe = if tc > 0.0 { tc } else { 1.0 };
+                inv_gf[c * b + k] = n_j[k] / safe;
+            }
+        }
+        let mut a = vec![0.0f64; t_n * b];
+        blas::ut_times(&base.u, &inv_gf, c_n, t_n, b, &mut a);
+        let mut per_row = vec![0.0f64; t_n * b];
+        for k in 0..b {
+            let col = cols[k];
+            for t in 0..t_n {
+                let code = col[t];
+                let nongap = if code >= 0 { 1.0 } else { 0.0 };
+                let cs = if code >= 0 { code as usize } else { 0 };
+                let ct = base.col_totals[t] - nongap;
+                if ct <= 0.0 {
+                    zero_mask[k] = true;
+                }
+                let inv_at = inv_gf[cs * b + k];
+                let cr_at = base.cr[cs * t_n + t];
+                let s = a[t * b + k] + nongap * (1.0 - 2.0 * cr_at) * inv_at;
+                let safe_ct = if ct > 0.0 { ct } else { 1.0 };
+                per_row[t * b + k] = s / safe_ct - ct;
+            }
+        }
+        let vals = match *reducer {
+            Reducer::Sum | Reducer::SumOfSquares => {
+                let sq = matches!(reducer, Reducer::SumOfSquares);
+                let f = |x: f64| if sq { x * x } else { x };
+                if b == 1 || fortran {
+                    let mut col = vec![0.0f64; t_n];
+                    (0..b)
+                        .map(|k| {
+                            for t in 0..t_n {
+                                col[t] = f(per_row[t * b + k]);
+                            }
+                            npy::pairwise_sum(&col)
+                        })
+                        .collect()
+                } else {
+                    let mut acc: Vec<f64> = per_row[..b].iter().map(|&x| f(x)).collect();
+                    for t in 1..t_n {
+                        for k in 0..b {
+                            acc[k] += f(per_row[t * b + k]);
+                        }
+                    }
+                    acc
+                }
+            }
+            Reducer::WassersteinZ { z, plan } => {
+                // Transpose to column-major and use the sort-based reference.
+                let cm: Vec<f64> = (0..b).flat_map(|k| (0..t_n).map(move |t| (k, t))).map(|(k, t)| per_row[t * b + k]).collect();
+                wasserstein_by_full_sort(&cm, t_n, b, z, plan)
+            }
+        };
+        (vals, zero_mask)
+    }
+
+    #[test]
+    fn kernel_matches_row_major_reference() {
+        let n_chars = 4;
+        for &t_n in &[1usize, 37, 128, 300, 1000] {
+            // Gaps, uneven composition, and (column 0) a character only it holds.
+            let enc = sample(t_n, 120, n_chars);
+            let counts = chi2::fudge_counts(chi2::count_rows_raw(&enc, n_chars));
+            let base = Base::new(&counts, t_n, n_chars);
+            let null = NullState::new(NullMatrix::compute(&enc, n_chars, 3));
+            let z = ZParams::from_null(&null);
+            let plan = z.plan(t_n);
+            for alg in [Algorithm::Squared, Algorithm::Quartic, Algorithm::Wasserstein] {
+                let reducer = Reducer::new(alg, Some(&z), Some(&plan));
+                for &b in &[1usize, 5, 16, 37] {
+                    for &fortran in &[false, true] {
+                        for start in [0usize, 7] {
+                            let cols: Vec<&[i8]> = (start..start + b).map(|j| enc.column(j)).collect();
+                            let mut sc = KernelScratch::default();
+                            base.per_row_block(&cols, &mut sc.block);
+                            let got = reducer.reduce(&sc.block.per_row, t_n, b, fortran, &mut sc.reduce);
+                            let (want, want_zero) = old_block_scores(&base, &reducer, &cols, fortran);
+                            assert_eq!(sc.block.zero_mask, want_zero, "{alg:?} T {t_n} b {b}");
+                            for (k, (g, w)) in got.iter().zip(&want).enumerate() {
+                                assert_eq!(g.to_bits(), w.to_bits(), "{alg:?} T {t_n} b {b} F {fortran} col {k}");
+                            }
+                            // And through block_scores (thread-local scratch,
+                            // reused across calls, degenerate fallback).
+                            let via = block_scores(&base, &reducer, &counts, &cols, fortran && t_n * b * 8 >= MIN_ELIDE_BYTES);
+                            assert_eq!(via.len(), b);
+                        }
+                    }
                 }
             }
         }
