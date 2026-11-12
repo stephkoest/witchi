@@ -98,3 +98,16 @@ The old binary could not have run this size:
 - Its delta-null kept one 8 GB permuted copy per thread, which is 384 GB at 48 threads.
 
 **Where the remaining time is:** the delta-null and the prune iterations are nearly all of it. Both are the shuffle plus the delta kernel (BLAS product, per-row block, Wasserstein rank selection), which the byte-identical work has already optimized. Further large gains would have to change how much work is done, and that changes the output: fewer delta-null permutations, a larger `top_n` (fewer iterations), or approximate quantiles.
+
+## Against Python v0.2.0
+
+This is the command Python v0.2.0 used for the full-MSA reference: `--pruning_algorithm wasserstein --top_n 10 --permutations 20 --max_residue_pruned 50 --num_workers_permute 16 --num_workers_chisq 4` on the 12,944 × 13,540 MSA. Both versions ran it under `scripts/peak_mem.py`.
+
+GNU `time` can't measure Python's memory here. It reports the largest single process, and Python's joblib workers are separate processes. `peak_mem.py` instead sums memory across the whole process tree. It uses PSS, which splits shared pages between the processes that map them, so the sum is what the tree actually uses.
+
+| Version | Wall | Peak memory (tree PSS) | Summed RSS | Largest process |
+|---|---:|---:|---:|---:|
+| Python v0.2.0 | 413 s | 22.2 GB | 32.6 GB | 3.3 GB |
+| Rust v0.3.1 | 11.8 s | 0.37 GB | 0.37 GB | 0.37 GB |
+
+Python's outputs from this run are byte-identical to the stored references (`tests/golden_full/py`).
