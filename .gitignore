@@ -3,3 +3,6 @@
 /test_data/*.faa
 /tests/golden_large/
 /tests/golden_full/
+/bench/data/
+/bench/runs/
+/target-dev
