@@ -140,7 +140,7 @@ Run times of `witchi prune` v0.3.1 with default settings (Wasserstein, 100 permu
 
 Run time grows roughly linearly with the number of alignment cells (taxa × columns) and with `--permutations`. Peak memory is about one byte per alignment cell plus working memory per CPU that grows with the number of taxa.
 
-On the GTDB r237 archaeal alignment (`--top_n 10 --permutations 20 --max_residue_pruned 50`, 16 CPUs), v0.3.1 takes 11 s, about 37× faster than the 412 s of the Python v0.2.0 implementation.
+On the GTDB r237 archaeal alignment (`--top_n 10 --permutations 20 --max_residue_pruned 50`, 16 CPUs), v0.3.1 takes 11 s with a peak memory of 0.37 GB, about 37× faster and with 60× less memory than the Python v0.2.0 implementation (412 s and 22 GB summed across its worker processes).
 
 ## License
 witchi is licensed under the MIT License.
