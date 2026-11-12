@@ -23,12 +23,13 @@ pub fn for_each_permuted_column(enc: &Encoded, seed: u64, mut visit: impl FnMut(
     }
 }
 
-/// The whole permuted alignment (column-major), for the delta null.
+/// The whole permuted alignment (column-major). The delta null streams the
+/// same columns instead; this is the reference it is tested against.
 pub fn permuted(enc: &Encoded, seed: u64) -> Encoded {
-    let mut codes = vec![0i8; enc.codes.len()];
+    let mut codes = vec![0i8; enc.nrows * enc.ncols];
     let t = enc.nrows;
     for_each_permuted_column(enc, seed, |j, col| codes[j * t..(j + 1) * t].copy_from_slice(col));
-    Encoded { nrows: enc.nrows, ncols: enc.ncols, codes, fortran: false }
+    Encoded::from_codes(codes, enc.nrows, enc.ncols)
 }
 
 /// Per-taxon chi^2 of one permuted alignment.
@@ -81,16 +82,47 @@ pub fn empirical_p(x: f64, null: &[f64]) -> f64 {
     n as f64 / null.len() as f64
 }
 
+/// A null distribution prepared for many `#(null >= x)` queries: the non-NaN
+/// values sorted ascending (NaN never satisfies `>=`), plus the full length.
+pub struct SortedNull {
+    sorted: Vec<f64>,
+    len: usize,
+}
+
+impl SortedNull {
+    pub fn new(null: &[f64]) -> Self {
+        let mut sorted: Vec<f64> = null.iter().copied().filter(|v| !v.is_nan()).collect();
+        sorted.par_sort_unstable_by(|a, b| a.total_cmp(b));
+        SortedNull { sorted, len: null.len() }
+    }
+
+    /// `#(null >= x)`, exactly as the elementwise comparison counts it.
+    ///
+    /// `v < x` is monotone over the sorted values (total order differs from IEEE
+    /// only in placing -0.0 before 0.0, which compare equal either way).
+    pub fn count_ge(&self, x: f64) -> usize {
+        if x.is_nan() {
+            return 0;
+        }
+        self.sorted.len() - self.sorted.partition_point(|&v| v < x)
+    }
+
+    /// Per-taxon Bonferroni empirical p-values, clipped to [0, 1].
+    pub fn p_per_taxon(&self, per_row: &[f64]) -> Vec<f64> {
+        let n_taxa = per_row.len() as f64;
+        per_row
+            .par_iter()
+            .map(|&x| {
+                let p = (self.count_ge(x) as f64 / self.len as f64) * n_taxa;
+                p.max(0.0).min(1.0)
+            })
+            .collect()
+    }
+}
+
 /// Per-taxon Bonferroni empirical p-values, clipped to [0, 1].
 pub fn empirical_p_per_taxon(per_row: &[f64], null: &[f64]) -> Vec<f64> {
-    let n_taxa = per_row.len() as f64;
-    per_row
-        .iter()
-        .map(|&x| {
-            let p = (null.iter().filter(|&&v| v >= x).count() as f64 / null.len() as f64) * n_taxa;
-            p.max(0.0).min(1.0)
-        })
-        .collect()
+    SortedNull::new(null).p_per_taxon(per_row)
 }
 
 /// Robust Z-score: mean centring, MAD scaling (`utils._robust_zscore`).
@@ -167,4 +199,43 @@ pub fn biased_taxa_threshold(pooled: &[f64], n_taxa: usize) -> f64 {
         return f64::INFINITY;
     }
     npy::kth_smallest(pooled, kth as usize)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SortedNull;
+
+    #[test]
+    fn sorted_null_counts_like_elementwise_ge() {
+        let mut null = vec![
+            f64::NAN, -0.0, 0.0, 1.0, 1.0, 1.0, -2.5, f64::INFINITY, f64::NEG_INFINITY,
+            -f64::NAN, 3.25, 1e-300, -1e-300, 7.0,
+        ];
+        let mut state = 0x2545_f491_4f6c_dd1du64;
+        for _ in 0..500 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            null.push(((state % 41) as f64 - 20.0) / 4.0);
+        }
+        let sn = SortedNull::new(&null);
+        let mut probes = null.clone();
+        probes.extend([0.5, -100.0, 100.0, f64::MAX, f64::MIN, f64::NAN]);
+        for &x in &probes {
+            let want = null.iter().filter(|&&v| v >= x).count();
+            assert_eq!(sn.count_ge(x), want, "x = {x:?}");
+        }
+        let per_row = [1.0, -0.0, f64::NAN, 2.0];
+        let want: Vec<f64> = per_row
+            .iter()
+            .map(|&x| {
+                let p = (null.iter().filter(|&&v| v >= x).count() as f64 / null.len() as f64) * 4.0;
+                p.max(0.0).min(1.0)
+            })
+            .collect();
+        let got = sn.p_per_taxon(&per_row);
+        for (g, w) in got.iter().zip(&want) {
+            assert_eq!(g.to_bits(), w.to_bits());
+        }
+    }
 }

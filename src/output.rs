@@ -97,8 +97,9 @@ pub fn write_all(
 
     // Per-taxon before/after Z and p (against the original null).
     let pooled = &original_null.pooled;
-    let p_before = permutation::empirical_p_per_taxon(&res.before_real, pooled);
-    let p_after = permutation::empirical_p_per_taxon(&res.after_real, pooled);
+    let sorted_null = permutation::SortedNull::new(pooled);
+    let p_before = sorted_null.p_per_taxon(&res.before_real);
+    let p_after = sorted_null.p_per_taxon(&res.after_real);
     let rs = RobustStats::of(pooled);
     // dict keyed by taxon id: duplicates keep the first position, last values.
     let mut by_name: IndexMap<&str, [f64; 5]> = IndexMap::new();

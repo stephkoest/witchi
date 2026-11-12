@@ -14,6 +14,7 @@ use crate::blas;
 use crate::chi2::{self, Encoded};
 use crate::npy::{self, QuantilePlan};
 use crate::permutation::{self, NullState, SEED_BASE};
+use crate::rng::Pcg64;
 
 /// Pruning algorithm (`--pruning_algorithm`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -130,8 +131,8 @@ pub fn blocks(nrows: usize, ncols: usize, num_workers: usize) -> Vec<(usize, usi
 }
 
 /// Shared per-call inputs of the block kernel.
-struct Base<'a> {
-    enc: &'a Encoded,
+struct Base {
+    t_n: usize,
     n_chars: usize,
     cr: Vec<f64>,
     u: Vec<f64>,
@@ -140,9 +141,9 @@ struct Base<'a> {
     col_totals: Vec<f64>,
 }
 
-impl<'a> Base<'a> {
-    fn new(counts: &[i64], enc: &'a Encoded, n_chars: usize) -> Self {
-        let t = enc.nrows;
+impl Base {
+    fn new(counts: &[i64], t_n: usize, n_chars: usize) -> Self {
+        let t = t_n;
         let cr: Vec<f64> = counts.iter().map(|&v| v as f64).collect();
         let u: Vec<f64> = cr.iter().map(|&v| v * v).collect();
         let total_chars: Vec<f64> =
@@ -154,17 +155,18 @@ impl<'a> Base<'a> {
                 col_totals[ti] += cr[c * t + ti];
             }
         }
-        Base { enc, n_chars, cr, u, total_chars, n_total, col_totals }
+        Base { t_n, n_chars, cr, u, total_chars, n_total, col_totals }
     }
 
     /// `_per_row_chi2_block`: per-row chi^2 (T x b, row-major) after removing
-    /// each block column, plus the degenerate-column mask.
-    fn per_row_block(&self, j_start: usize, j_end: usize) -> (Vec<f64>, Vec<bool>) {
-        let (c_n, t_n, b) = (self.n_chars, self.enc.nrows, j_end - j_start);
+    /// each block column (`cols`, the block's b encoded columns in order), plus
+    /// the degenerate-column mask.
+    fn per_row_block(&self, cols: &[&[i8]]) -> (Vec<f64>, Vec<bool>) {
+        let (c_n, t_n, b) = (self.n_chars, self.t_n, cols.len());
         let mut count_at_col = vec![0.0f64; c_n * b];
         let mut n_nongap = vec![0.0f64; b];
         for k in 0..b {
-            for &code in self.enc.column(j_start + k) {
+            for &code in cols[k] {
                 if code >= 0 {
                     count_at_col[code as usize * b + k] += 1.0;
                     n_nongap[k] += 1.0;
@@ -188,7 +190,7 @@ impl<'a> Base<'a> {
         blas::ut_times(&self.u, &inv_gf, c_n, t_n, b, &mut a);
         let mut per_row = vec![0.0f64; t_n * b];
         for k in 0..b {
-            let col = self.enc.column(j_start + k);
+            let col = cols[k];
             for t in 0..t_n {
                 let code = col[t];
                 let nongap = if code >= 0 { 1.0 } else { 0.0 };
@@ -231,7 +233,19 @@ pub fn per_row_block_is_fortran(alignment_fortran: bool, nrows: usize, b: usize)
     alignment_fortran && b >= 2 && nrows * b * 8 >= MIN_ELIDE_BYTES
 }
 
-impl Reducer<'_> {
+impl<'a> Reducer<'a> {
+    /// The reducer of `alg`; Wasserstein needs `z` and a plan for T values.
+    fn new(alg: Algorithm, z: Option<&'a ZParams>, plan: Option<&'a QuantilePlan>) -> Self {
+        match alg {
+            Algorithm::Squared => Reducer::Sum,
+            Algorithm::Quartic => Reducer::SumOfSquares,
+            Algorithm::Wasserstein => Reducer::WassersteinZ {
+                z: z.expect("wasserstein needs null Z parameters"),
+                plan: plan.expect("wasserstein needs a quantile plan"),
+            },
+        }
+    }
+
     /// Reduce a (T x b) row-major block to b values with numpy's operation
     /// order: axis-0 sums are sequential over rows when the block is C-ordered
     /// with b > 1, and pairwise per column when the reduced axis is contiguous
@@ -294,6 +308,49 @@ impl Reducer<'_> {
     }
 }
 
+/// Quantile plan for the Wasserstein reducer on T values (`None` otherwise).
+fn plan_for(alg: Algorithm, z: Option<&ZParams>, t_n: usize) -> Option<QuantilePlan> {
+    match alg {
+        Algorithm::Wasserstein => Some(z.expect("wasserstein needs null Z parameters").plan(t_n)),
+        _ => None,
+    }
+}
+
+/// The active score of the alignment without each column of one block
+/// (`cols`, in order). Degenerate columns (a character or taxon total that
+/// drops to zero) are recomputed directly, as Python does.
+fn block_scores(
+    base: &Base,
+    reducer: &Reducer,
+    counts: &[i64],
+    cols: &[&[i8]],
+    alignment_fortran: bool,
+) -> Vec<f64> {
+    let (t_n, b) = (base.t_n, cols.len());
+    let (per_row, zero) = base.per_row_block(cols);
+    let fortran = per_row_block_is_fortran(alignment_fortran, t_n, b);
+    let mut vals = reducer.reduce(&per_row, t_n, b, fortran);
+    for (k, &is_zero) in zero.iter().enumerate() {
+        if is_zero {
+            vals[k] = degenerate_score(reducer, counts, base.n_chars, t_n, cols[k]);
+        }
+    }
+    vals
+}
+
+/// Direct recomputation of the score without one column.
+fn degenerate_score(reducer: &Reducer, counts: &[i64], n_chars: usize, t_n: usize, col: &[i8]) -> f64 {
+    let mut cc = counts.to_vec();
+    for (ti, &code) in col.iter().enumerate() {
+        if code >= 0 {
+            cc[code as usize * t_n + ti] -= 1;
+        }
+    }
+    let e = chi2::expected_observed(&cc, n_chars, t_n);
+    let per_row = chi2::row_chi2(&e, &cc, n_chars, t_n);
+    reducer.reduce(&per_row, t_n, 1, false)[0]
+}
+
 /// Delta score per column: `initial - score_without_column_j`
 /// (`calculate_{global_chi2,quartic_chi2,wasserstein_zscore}_difference`).
 ///
@@ -308,52 +365,21 @@ pub fn column_deltas(
     num_workers_chisq: usize,
     parallel: bool,
 ) -> Vec<f64> {
-    let base = Base::new(counts, enc, n_chars);
     let t_n = enc.nrows;
-    let plan;
-    let reducer = match alg {
-        Algorithm::Squared => Reducer::Sum,
-        Algorithm::Quartic => Reducer::SumOfSquares,
-        Algorithm::Wasserstein => {
-            let zp = z.expect("wasserstein needs null Z parameters");
-            plan = zp.plan(t_n);
-            Reducer::WassersteinZ { z: zp, plan: &plan }
-        }
-    };
+    let base = Base::new(counts, t_n, n_chars);
+    let plan = plan_for(alg, z, t_n);
+    let reducer = Reducer::new(alg, z, plan.as_ref());
     let blocks = blocks(t_n, enc.ncols, num_workers_chisq);
     let run = |&(s, e): &(usize, usize)| {
-        let (per_row, zero) = base.per_row_block(s, e);
-        let fortran = per_row_block_is_fortran(enc.fortran, t_n, e - s);
-        (reducer.reduce(&per_row, t_n, e - s, fortran), zero)
+        let cols: Vec<&[i8]> = (s..e).map(|j| enc.column(j)).collect();
+        block_scores(&base, &reducer, counts, &cols, enc.fortran)
     };
-    let results: Vec<(Vec<f64>, Vec<bool>)> = if parallel {
+    let results: Vec<Vec<f64>> = if parallel {
         blocks.par_iter().map(run).collect()
     } else {
         blocks.iter().map(run).collect()
     };
-    let mut out = Vec::with_capacity(enc.ncols);
-    let mut zero_cols = Vec::new();
-    for ((s, _), (vals, zero)) in blocks.iter().zip(results) {
-        for (k, &is_zero) in zero.iter().enumerate() {
-            if is_zero {
-                zero_cols.push(s + k);
-            }
-        }
-        out.extend(vals);
-    }
-    // Degenerate columns: direct recomputation without column j.
-    for j in zero_cols {
-        let mut cc = counts.to_vec();
-        for (ti, &code) in enc.column(j).iter().enumerate() {
-            if code >= 0 {
-                cc[code as usize * t_n + ti] -= 1;
-            }
-        }
-        let e = chi2::expected_observed(&cc, n_chars, t_n);
-        let per_row = chi2::row_chi2(&e, &cc, n_chars, t_n);
-        out[j] = reducer.reduce(&per_row, t_n, 1, false)[0];
-    }
-    out.iter().map(|&v| initial - v).collect()
+    results.into_iter().flatten().map(|v| initial - v).collect()
 }
 
 /// Scores and deltas of the current alignment for the active algorithm
@@ -394,19 +420,103 @@ pub fn null_max_deltas(
     z: Option<&ZParams>,
 ) -> Vec<f64> {
     let z = z.map(|zp| zp.clone().with_plan_for(enc.nrows));
-    {
-        (0..permutations)
-            .into_par_iter()
-            .map(|i| {
-                let seed = SEED_BASE + permutations as u64 + i as u64;
-                let p_enc = permutation::permuted(enc, seed);
-                let counts = chi2::fudge_counts(chi2::count_rows_raw(&p_enc, n_chars));
-                let e = chi2::expected_observed(&counts, n_chars, enc.nrows);
-                // num_workers is forced to 1 in Python: a single chunk.
-                let (_, deltas) =
-                    score_and_deltas(alg, &counts, &e, &p_enc, n_chars, z.as_ref(), 1, false);
-                python_max(&deltas)
-            })
-            .collect()
+    (0..permutations)
+        .into_par_iter()
+        .map(|i| null_max_delta(alg, enc, n_chars, SEED_BASE + permutations as u64 + i as u64, z.as_ref()))
+        .collect()
+}
+
+/// Max delta of the alignment permuted with `seed`, without materializing it.
+///
+/// Pass 1 shuffles column by column and only accumulates the counts. Pass 2
+/// restarts the generator from the same seed, so it regenerates exactly the
+/// same permuted columns, one kernel block at a time. Python forces a single
+/// chunk here (num_workers 1) and the permuted array is C-ordered.
+fn null_max_delta(alg: Algorithm, enc: &Encoded, n_chars: usize, seed: u64, z: Option<&ZParams>) -> f64 {
+    let t_n = enc.nrows;
+    let mut raw = vec![0i64; n_chars * t_n];
+    permutation::for_each_permuted_column(enc, seed, |_, col| chi2::add_column_counts(&mut raw, col, t_n));
+    let counts = chi2::fudge_counts(raw);
+    let initial = {
+        let e = chi2::expected_observed(&counts, n_chars, t_n);
+        initial_score(alg, &e, &counts, n_chars, t_n, z)
+    };
+    let base = Base::new(&counts, t_n, n_chars);
+    let plan = plan_for(alg, z, t_n);
+    let reducer = Reducer::new(alg, z, plan.as_ref());
+
+    let mut rng = Pcg64::from_seed(seed);
+    let mut buf = vec![0i8; t_n * block_width(t_n).min(enc.ncols)];
+    // Python's max(): first value, then strictly greater (NaN-sticky).
+    let mut best: Option<f64> = None;
+    for (s, e) in blocks(t_n, enc.ncols, 1) {
+        let b = e - s;
+        for (k, slot) in buf[..b * t_n].chunks_exact_mut(t_n).enumerate() {
+            slot.copy_from_slice(enc.column(s + k));
+            rng.shuffle(slot);
+        }
+        let cols: Vec<&[i8]> = buf[..b * t_n].chunks_exact(t_n).collect();
+        for v in block_scores(&base, &reducer, &counts, &cols, false) {
+            let d = initial - v;
+            best = Some(match best {
+                Some(m) if !(d > m) => m,
+                _ => d,
+            });
+        }
+    }
+    best.expect("alignment has at least one column")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::permutation::{NullMatrix, NullState};
+
+    /// A small encoded alignment with gaps, a column holding the only
+    /// occurrences of character 3 (degenerate when removed) and enough columns
+    /// for several blocks.
+    fn sample(nrows: usize, ncols: usize, n_chars: usize) -> Encoded {
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        let mut codes = vec![0i8; nrows * ncols];
+        for j in 0..ncols {
+            for t in 0..nrows {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                let r = (state >> 33) as usize;
+                codes[j * nrows + t] = if j == 0 {
+                    (n_chars - 1) as i8
+                } else if r % 17 == 0 {
+                    -1
+                } else {
+                    ((r + t * (j % 3)) % (n_chars - 1)) as i8
+                };
+            }
+        }
+        Encoded::from_codes(codes, nrows, ncols)
+    }
+
+    #[test]
+    fn streamed_delta_null_matches_materialized() {
+        let (n_chars, permutations) = (4, 5);
+        for &(nrows, ncols) in &[(12usize, 300usize), (40, 97), (1, 20)] {
+            let enc = sample(nrows, ncols, n_chars);
+            let null = NullState::new(NullMatrix::compute(&enc, n_chars, permutations));
+            let z = ZParams::from_null(&null);
+            for alg in [Algorithm::Squared, Algorithm::Quartic, Algorithm::Wasserstein] {
+                let got = null_max_deltas(alg, &enc, n_chars, permutations, Some(&z));
+                let zp = z.clone().with_plan_for(nrows);
+                for (i, g) in got.iter().enumerate() {
+                    let seed = SEED_BASE + permutations as u64 + i as u64;
+                    let p_enc = permutation::permuted(&enc, seed);
+                    let counts = chi2::fudge_counts(chi2::count_rows_raw(&p_enc, n_chars));
+                    let e = chi2::expected_observed(&counts, n_chars, nrows);
+                    let (_, deltas) =
+                        score_and_deltas(alg, &counts, &e, &p_enc, n_chars, Some(&zp), 1, false);
+                    let want = python_max(&deltas);
+                    assert_eq!(g.to_bits(), want.to_bits(), "{alg:?} {nrows}x{ncols} perm {i}");
+                }
+            }
+        }
     }
 }

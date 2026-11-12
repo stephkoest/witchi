@@ -5,6 +5,8 @@
 //!   index into the char set or -1 (gap / not in the char set);
 //! * counts and expected values are (C, T) row-major: `x[c * T + t]`.
 
+use std::sync::Arc;
+
 use crate::npy;
 
 /// An int-encoded alignment, column-major.
@@ -14,15 +16,28 @@ use crate::npy;
 /// returns an F-ordered array, deleting a single column keeps the current
 /// order, and the touchdown rollback re-encodes it C-ordered. The order is
 /// observable: see `delta::Reducer`.
+///
+/// Storage is a shared, immutable column-major code matrix plus the list of
+/// its columns that are still active, so cloning and deleting columns never
+/// copy the codes (column `j` of the view is stored column `active[j]`).
 #[derive(Clone, Debug)]
 pub struct Encoded {
     pub nrows: usize,
     pub ncols: usize,
-    pub codes: Vec<i8>,
+    codes: Arc<Vec<i8>>,
+    /// Stored column index of each active column; `None` = all, in order.
+    active: Option<Arc<[u32]>>,
     pub fortran: bool,
 }
 
 impl Encoded {
+    /// Wrap a column-major code matrix (`codes[j * nrows + t]`), C-ordered.
+    pub fn from_codes(codes: Vec<i8>, nrows: usize, ncols: usize) -> Self {
+        assert_eq!(codes.len(), nrows * ncols, "code matrix size");
+        assert!(ncols <= u32::MAX as usize, "too many columns");
+        Encoded { nrows, ncols, codes: Arc::new(codes), active: None, fortran: false }
+    }
+
     /// Encode a row-major byte alignment against `char_set`.
     pub fn from_rows(data: &[u8], nrows: usize, ncols: usize, char_set: &[u8]) -> Self {
         let lut = lookup_table(char_set);
@@ -33,11 +48,22 @@ impl Encoded {
                 codes[j * nrows + t] = lut[b as usize];
             }
         }
-        Encoded { nrows, ncols, codes, fortran: false }
+        Encoded::from_codes(codes, nrows, ncols)
     }
 
+    #[inline]
+    fn stored(&self, j: usize) -> usize {
+        match &self.active {
+            Some(a) => a[j] as usize,
+            None => j,
+        }
+    }
+
+    #[inline]
     pub fn column(&self, j: usize) -> &[i8] {
-        &self.codes[j * self.nrows..(j + 1) * self.nrows]
+        debug_assert!(j < self.ncols);
+        let s = self.stored(j);
+        &self.codes[s * self.nrows..(s + 1) * self.nrows]
     }
 
     /// Remove the given columns (any order; duplicates ignored), following
@@ -48,20 +74,21 @@ impl Encoded {
         out
     }
 
-    /// Remove columns; the result is a freshly encoded (C-ordered) alignment.
+    /// Remove columns; the result is C-ordered, like a freshly encoded alignment.
     pub fn delete_columns_raw(&self, cols: &[usize]) -> Encoded {
         let mut drop = vec![false; self.ncols];
         for &c in cols {
             drop[c] = true;
         }
-        let keep = drop.iter().filter(|d| !**d).count();
-        let mut codes = Vec::with_capacity(keep * self.nrows);
-        for j in 0..self.ncols {
-            if !drop[j] {
-                codes.extend_from_slice(self.column(j));
-            }
+        let active: Arc<[u32]> =
+            (0..self.ncols).filter(|&j| !drop[j]).map(|j| self.stored(j) as u32).collect();
+        Encoded {
+            nrows: self.nrows,
+            ncols: active.len(),
+            codes: Arc::clone(&self.codes),
+            active: Some(active),
+            fortran: false,
         }
-        Encoded { nrows: self.nrows, ncols: keep, codes, fortran: false }
     }
 }
 
