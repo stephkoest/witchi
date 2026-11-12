@@ -17,5 +17,6 @@ pub mod pyfmt;
 pub mod rng;
 pub mod testcmd;
 
-/// Version reported in output files (`witchi_version` in the score JSON).
-pub const WITCHI_VERSION: &str = "0.2.0";
+/// Version reported in the console banner and the JSON `witchi_version` field
+/// (the crate version; the Python reference these outputs match is 0.2.0).
+pub const WITCHI_VERSION: &str = env!("CARGO_PKG_VERSION");

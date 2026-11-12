@@ -11,10 +11,40 @@
 //! Set `WITCHI_GOLDEN_FILTER=<substring>` to run a subset of cases, and
 //! `WITCHI_GOLDEN_BIN=<path>` to test another binary (e.g. Python's `witchi`).
 //! `stdout.txt` in a reference dir is informational and never compared.
+//!
+//! The only intended difference from the references is the version: the port
+//! reports its own (`witchi::WITCHI_VERSION`) in the console banner and in the
+//! JSON `witchi_version` field, where Python wrote `REFERENCE_VERSION`. Those
+//! two strings are mapped back before the byte comparison.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// The Python WitChi version the references were generated with.
+const REFERENCE_VERSION: &str = "0.2.0";
+
+/// Map the port's version back to the reference's in the console banner
+/// (`witchi <version>` lines) of a stdout text.
+fn banner_to_reference(stdout: &str) -> String {
+    let ours = format!("witchi {}", witchi::WITCHI_VERSION);
+    stdout
+        .lines()
+        .map(|l| if l == ours { format!("witchi {REFERENCE_VERSION}") } else { l.to_string() })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Map the port's version back to the reference's in a `_score_dict.json`
+/// (exactly the `"witchi_version": "<version>"` member).
+fn json_to_reference(bytes: Vec<u8>) -> Vec<u8> {
+    let ours = format!("\"witchi_version\": \"{}\"", witchi::WITCHI_VERSION);
+    let theirs = format!("\"witchi_version\": \"{REFERENCE_VERSION}\"");
+    match String::from_utf8(bytes) {
+        Ok(s) => s.replacen(&ours, &theirs, 1).into_bytes(),
+        Err(e) => e.into_bytes(),
+    }
+}
 
 struct Case {
     name: String,
@@ -112,7 +142,8 @@ fn run_case(case: &Case, data_dir: &Path, golden_dir: &Path, work_root: &Path, s
         let strip = |s: &str| -> String {
             s.lines().filter(|l| !l.starts_with("Execution time")).collect::<Vec<_>>().join("\n")
         };
-        let (e, a) = (strip(&expected_stdout), strip(&String::from_utf8_lossy(&output.stdout)));
+        let actual_stdout = banner_to_reference(&String::from_utf8_lossy(&output.stdout));
+        let (e, a) = (strip(&expected_stdout), strip(&actual_stdout));
         if e != a {
             if subcommand == "test" {
                 failures.push(format!("stdout.txt: {}", first_difference(e.as_bytes(), a.as_bytes())));
@@ -132,7 +163,8 @@ fn run_case(case: &Case, data_dir: &Path, golden_dir: &Path, work_root: &Path, s
         let file_name = expected_path.file_name().unwrap();
         let actual_path = work.join(file_name);
         let expected = fs::read(&expected_path).unwrap();
-        match fs::read(&actual_path) {
+        let is_json = file_name.to_string_lossy().ends_with("_score_dict.json");
+        match fs::read(&actual_path).map(|a| if is_json { json_to_reference(a) } else { a }) {
             Err(_) => failures.push(format!("{}: not written", file_name.to_string_lossy())),
             Ok(actual) if actual != expected => failures.push(format!(
                 "{}: {}",

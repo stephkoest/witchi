@@ -2,7 +2,9 @@
 
 A Rust port of [WitChi](https://github.com/stephkoest/witchi) v0.2.0, which tests and prunes
 compositionally biased columns in multiple sequence alignments. On the same machine and with the
-same OpenBLAS build, its output files are **byte-identical** to the Python reference. See
+same OpenBLAS build, its output files are **byte-identical** to the Python reference, apart from
+the version string: the port reports its own version (0.3.1) in the console banner and in the JSON
+`witchi_version` field, where Python 0.2.0 writes `0.2.0`. See
 [PLAN.md](PLAN.md) for the design, the numerical hazards and how each one is handled.
 
 ## Build
