@@ -2,13 +2,16 @@
 
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
-use std::fs;
+use rayon::prelude::*;
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
 
-use crate::alignment::{Alignment, render_fasta};
+use crate::alignment::{Alignment, Record, render_fasta};
+use crate::chi2::{Decoder, Encoded};
 use crate::delta::Algorithm;
 use crate::permutation::{self, NullMatrix, RobustStats};
 use crate::pruner::{PruneOptions, PruneResult};
-use crate::pyfmt::{Json, repr_f64, tsv_row};
+use crate::pyfmt::{Json, json_float_list, json_string, newline_indent, repr_f64, tsv_row};
 use crate::WITCHI_VERSION;
 
 pub struct OutputFiles {
@@ -40,10 +43,145 @@ fn write(path: &str, bytes: &[u8]) -> Result<()> {
     fs::write(path, bytes).with_context(|| format!("cannot write {path}"))
 }
 
+fn create(path: &str) -> Result<BufWriter<File>> {
+    let f = File::create(path).with_context(|| format!("cannot write {path}"))?;
+    Ok(BufWriter::with_capacity(1 << 22, f))
+}
+
+/// Taxa per FASTA rendering task: 64 consecutive taxa share each cache line of
+/// a column of the column-major codes.
+const FASTA_ROWS_PER_TASK: usize = 64;
+
+/// The pruned alignment as Biopython FASTA, streamed: groups of taxa are
+/// gathered from the column-major codes and rendered in parallel, then
+/// written in order.
+fn write_pruned_fasta(
+    path: &str,
+    records: &[Record],
+    enc: &Encoded,
+    decoder: &Decoder,
+    kept: &[usize],
+) -> Result<()> {
+    let mut w = create(path)?;
+    let t_n = enc.nrows;
+    let starts: Vec<usize> = (0..t_n).step_by(FASTA_ROWS_PER_TASK).collect();
+    let batch = 2 * rayon::current_num_threads().max(1);
+    for group in starts.chunks(batch) {
+        let rendered: Vec<Vec<u8>> = group
+            .par_iter()
+            .map(|&t0| {
+                let t1 = (t0 + FASTA_ROWS_PER_TASK).min(t_n);
+                let (rows, l) = (t1 - t0, kept.len());
+                let mut tile = vec![0u8; rows * l];
+                for (jj, &j) in kept.iter().enumerate() {
+                    for (r, &code) in enc.column(j)[t0..t1].iter().enumerate() {
+                        tile[r * l + jj] = decoder.byte(code);
+                    }
+                }
+                let mut out = Vec::with_capacity(rows * (l + l / 60 + 64));
+                render_fasta(&records[t0..t1], (0..rows).map(|r| &tile[r * l..(r + 1) * l]), &mut out);
+                out
+            })
+            .collect();
+        for chunk in rendered {
+            w.write_all(&chunk).with_context(|| format!("cannot write {path}"))?;
+        }
+    }
+    w.flush().with_context(|| format!("cannot write {path}"))
+}
+
+/// The score dictionary as `json.dumps(doc, indent=4)`, streamed member by
+/// member; the (P, T) permuted null is formatted in parallel, row by row.
+fn write_score_json(
+    path: &str,
+    alg: Algorithm,
+    records: &[Record],
+    original_null: &NullMatrix,
+    res: &PruneResult,
+) -> Result<()> {
+    let mut w = create(path)?;
+    let put = |w: &mut BufWriter<File>, s: &str| -> Result<()> {
+        w.write_all(s.as_bytes()).with_context(|| format!("cannot write {path}"))
+    };
+    let mut first = true;
+    let mut key = |out: &mut String, k: &str| {
+        if !first {
+            out.push(',');
+        }
+        first = false;
+        newline_indent(out, 1);
+        json_string(out, k);
+        out.push_str(": ");
+    };
+    let mut head = String::from("{");
+    let small = [
+        ("schema_version", Json::Int(3)),
+        ("witchi_version", Json::Str(WITCHI_VERSION.to_string())),
+        ("algorithm", Json::Str(alg.name().to_string())),
+        ("stop_reason", Json::Str(res.stop_reason.clone())),
+        ("null_recomputes", Json::Int(res.null_recomputes as i64)),
+        ("taxa", Json::List(records.iter().map(|r| Json::Str(r.id.clone())).collect())),
+    ];
+    for (k, v) in &small {
+        key(&mut head, k);
+        v.write_indented(&mut head, 1);
+    }
+    key(&mut head, "before_real");
+    json_float_list(&mut head, &res.before_real, 1);
+    key(&mut head, "after_real");
+    json_float_list(&mut head, &res.after_real, 1);
+    key(&mut head, "before_permuted");
+    put(&mut w, &head)?;
+
+    let t = original_null.ntaxa;
+    let p = original_null.permutations;
+    if p == 0 {
+        put(&mut w, "[]")?;
+    } else {
+        put(&mut w, "[")?;
+        let batch = 2 * rayon::current_num_threads().max(1);
+        let rows: Vec<usize> = (0..p).collect();
+        for group in rows.chunks(batch) {
+            let rendered: Vec<String> = group
+                .par_iter()
+                .map(|&i| {
+                    let mut s = String::new();
+                    if i > 0 {
+                        s.push(',');
+                    }
+                    newline_indent(&mut s, 2);
+                    json_float_list(&mut s, &original_null.pooled[i * t..(i + 1) * t], 2);
+                    s
+                })
+                .collect();
+            for s in rendered {
+                put(&mut w, &s)?;
+            }
+        }
+        let mut close = String::new();
+        newline_indent(&mut close, 1);
+        close.push(']');
+        put(&mut w, &close)?;
+    }
+
+    let mut tail = String::new();
+    key(&mut tail, "null_max_deltas");
+    match res.null_max_deltas.as_deref() {
+        Some(md) => json_float_list(&mut tail, md, 1),
+        None => tail.push_str("null"),
+    }
+    newline_indent(&mut tail, 0);
+    tail.push('}');
+    put(&mut w, &tail)?;
+    w.flush().with_context(|| format!("cannot write {path}"))
+}
+
 pub fn write_all(
     opts: &PruneOptions,
     alg: Algorithm,
     aln: &Alignment,
+    enc: &Encoded,
+    decoder: &Decoder,
     original_null: &NullMatrix,
     res: &PruneResult,
 ) -> Result<OutputFiles> {
@@ -57,18 +195,7 @@ pub fn write_all(
     };
 
     // Pruned alignment.
-    let mut fasta = Vec::with_capacity(aln.nrows() * (res.kept_columns.len() + 64));
-    let mut row = Vec::with_capacity(res.kept_columns.len());
-    let rows: Vec<Vec<u8>> = (0..aln.nrows())
-        .map(|t| {
-            let full = aln.row(t);
-            row.clear();
-            row.extend(res.kept_columns.iter().map(|&j| full[j]));
-            row.clone()
-        })
-        .collect();
-    render_fasta(&aln.records, rows.iter().map(Vec::as_slice), &mut fasta);
-    write(&files.fasta, &fasta)?;
+    write_pruned_fasta(&files.fasta, &aln.records, enc, decoder, &res.kept_columns)?;
 
     // Prune trace.
     let mut tsv = String::new();
@@ -120,30 +247,7 @@ pub fn write_all(
     write(&files.scores, scores.as_bytes())?;
 
     // Score dictionary JSON.
-    let floats = |v: &[f64]| Json::List(v.iter().map(|&x| Json::Float(x)).collect());
-    let t = original_null.ntaxa;
-    let before_permuted = Json::List(
-        (0..original_null.permutations).map(|i| floats(&pooled[i * t..(i + 1) * t])).collect(),
-    );
-    let doc = Json::Obj(vec![
-        ("schema_version".into(), Json::Int(3)),
-        ("witchi_version".into(), Json::Str(WITCHI_VERSION.to_string())),
-        ("algorithm".into(), Json::Str(alg.name().to_string())),
-        ("stop_reason".into(), Json::Str(res.stop_reason.clone())),
-        ("null_recomputes".into(), Json::Int(res.null_recomputes as i64)),
-        (
-            "taxa".into(),
-            Json::List(aln.records.iter().map(|r| Json::Str(r.id.clone())).collect()),
-        ),
-        ("before_real".into(), floats(&res.before_real)),
-        ("after_real".into(), floats(&res.after_real)),
-        ("before_permuted".into(), before_permuted),
-        (
-            "null_max_deltas".into(),
-            res.null_max_deltas.as_deref().map(floats).unwrap_or(Json::Null),
-        ),
-    ]);
-    write(&files.json, doc.dumps_indent4().as_bytes())?;
+    write_score_json(&files.json, alg, &aln.records, original_null, res)?;
     Ok(files)
 }
 

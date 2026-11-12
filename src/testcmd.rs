@@ -53,12 +53,12 @@ fn run_inner(opts: &TestOptions) -> Result<()> {
             opts.file
         );
     }
-    let aln = alignment::read_alignment(Path::new(&opts.file), &opts.format)?;
+    let mut aln = alignment::read_alignment(Path::new(&opts.file), &opts.format)?;
     let seq_type = alignment::detect_sequence_type(&aln)?;
     println!("{}", seq_type.message());
     let char_set = seq_type.char_set();
     let n_chars = char_set.len();
-    let enc = Encoded::from_rows(&aln.data, aln.nrows(), aln.ncols, char_set);
+    let (enc, _) = Encoded::from_alignment(&mut aln, char_set);
 
     println!("Running {} permutations.", opts.permutations);
     println!("Using {} worker(s) for permutation", opts.num_workers_permute);

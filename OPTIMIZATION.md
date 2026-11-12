@@ -22,8 +22,8 @@ Measured single-thread costs used for the estimates (1,000 × 10,000, wasserstei
 
 ## Status
 
-Implemented: **T1, M2, M1** (PR #10), **T2** (PR #11), **T3 and T6** (PR #12), then **T4**. With
-them, all parity suites pass:
+Implemented: **T1, M2, M1** (PR #10), **T2** (PR #11), **T3 and T6** (PR #12), **T4** (PR #13),
+then **M3, M4, M5 and T5**. With them, all parity suites pass:
 - the 33 + 3 + 9 goldens
 - the 15 intermediate cases
 - the I/O, formatting and RNG fixtures
@@ -103,10 +103,29 @@ in flight now holds a batch of 32 shuffled columns and a (T, C + 1) `u32` count 
 At 200,000 taxa that is about 23 MB per thread, against 32 MB for the `i64` counts it
 already held.
 
-Next by impact:
-- The memory items M3–M5, which the target size needs.
-- T7.
-- T5 and T8.
+### M3, M4, M5 and T5
+
+The alignment now exists in memory once, as the encoded column-major matrix, from reading
+to writing. Measured as before; all output files byte-identical (full MSA vs Python, the
+others vs the previous binary and the original benchmark checksums):
+
+| Input | Threads | Wall (s) | Peak RSS (MB) | Read (s) | Write outputs (s) |
+|---|---:|---|---|---|---|
+| Full MSA 12,944 × 13,540 | 32 | 10.4 → 10.4 | 1,055 → 528 | 0.52 → 0.28 | 0.70 → 0.23 |
+| 10,000 × 10,000 | 32 | 24.8 → 23.4 | 855 → 467 | 0.38 → 0.20 | 1.29 → 0.45 |
+| 10,000 × 10,000 | 96 | 17.1 → 16.3 | 1,533 → 1,144 | 0.37 → 0.24 | 1.32 → 0.43 |
+| 10,000 × 100 | 32 | 1.78 → 0.94 | 419 → 374 | 0.01 → 0.01 | 0.94 → 0.20 |
+| 51,776 × 2,000 (wasserstein) | 32 | 9.4 → 8.5 | 1,572 → 1,152 | | |
+| 51,776 × 2,000 (squared) | 32 | 8.8 → 6.5 | 1,537 → 1,148 | | |
+
+What is left of peak memory is the alignment (T × L bytes) plus per-thread working
+memory, which grows with T. At the target size that is 8 GB plus about 50–60 MB per
+thread at 200,000 taxa. Each permutation in flight holds:
+- C × T counts and their f64 copies
+- the kernel's two T × b blocks
+- the counting batch and table
+
+Next by impact: T7 (parallelism gaps), then T8 (build flags).
 
 ## What breaks first at 200,000 × 40,000
 
@@ -173,6 +192,11 @@ per worker thread.
 - **Identical because:** kernels see the same sign and the same non-negative codes; the
   output decodes to the same characters.
 - **Effect:** steady-state alignment memory 16 GB → 8 GB.
+- **Done** (`Encoded::from_alignment`, `chi2::Decoder`):
+  - The matrix is encoded in place, with no copy.
+  - Non-char-set bytes get distinct negative codes, -1 to at most -124.
+  - The two histogram indexers clamp negative codes to -1. Every other kernel already
+    tested `code >= 0`.
 
 ### M4. Loading: stream the file
 
@@ -187,6 +211,16 @@ per worker thread.
   then fill) avoids even the transient second copy.
 - **Identical because:** same parsing rules, same bytes.
 - **Effect:** load peak about 30 GB → 16 GB (8 GB with the two-pass read).
+- **Done** (`fasta::read`, `AlignmentBuilder`), with the two-pass read:
+  - **Pass 1** validates UTF-8 across the whole file, carrying incomplete characters
+    across reads, and counts the records. A whole-file check keeps Python's error
+    precedence.
+  - **Pass 2** parses line by line with universal newlines. A lone `\r` ends a line,
+    and `\r\n` counts as one terminator. Residues go straight into the column-major
+    matrix (see T5).
+  - **NEXUS** keeps its text parser and feeds the same builder.
+  - The text parser (`fasta::parse`) is kept as the reference that a unit test compares
+    the streaming reader against.
 
 ### M5. Output: stream the FASTA and the JSON
 
@@ -197,6 +231,12 @@ per worker thread.
   time from the column-major codes. Write the JSON incrementally, formatting each
   permutation's row of floats in parallel and emitting the rows in order.
 - **Identical because:** same bytes in the same order.
+- **Done:**
+  - **FASTA:** groups of 64 taxa (one cache line of every column) are gathered from the
+    codes through the `Decoder`, rendered in parallel and written in order.
+  - **JSON:** written member by member. The (P, T) permuted null and the per-taxon lists
+    go through `json_float_list`, which a unit test checks against the `Json` tree. The
+    rows of the null are formatted in parallel.
 - **Effect:** removes about 16 GB of transient memory for the FASTA and about 1 GB for
   the JSON; float formatting (20 million `repr` calls) drops from tens of seconds on one
   thread to about a second.
@@ -324,6 +364,12 @@ per worker thread.
   set of residues present in the same pass that reads the file.
 - **Identical because:** same codes in the same places.
 - **Effect:** minutes → seconds at the target size.
+- **Done:**
+  - `AlignmentBuilder` buffers 256 rows and transposes them into the matrix in parallel,
+    over blocks of 64 columns. Each block is a contiguous part of the matrix.
+  - The set of bytes present is computed at the end, in parallel.
+  - Encoding is an in-place, parallel table lookup.
+  - Full MSA read: 0.28 s at 32 threads, 0.65 s on one thread.
 
 ### T6. Reuse kernel scratch buffers
 
@@ -381,7 +427,7 @@ per worker thread.
 1. T1, M2, M1 — small, contained, and they remove the hard blockers (done).
 2. T2, T3, T6 — the kernel; verify against `tests/intermediates` and the goldens (done).
 3. T4 (done).
-4. M3, M4, M5, T5 — the I/O path, done together because they share the storage change.
+4. M3, M4, M5, T5 — the I/O path, done together because they share the storage change (done).
 5. T7, T8.
 
 The existing parity suite (33 + 9 goldens, 15 intermediate dumps, the large tier and the

@@ -41,7 +41,8 @@ const COUNT_BATCH: usize = 32;
 ///
 /// Columns are shuffled in order with one generator, a batch at a time, and
 /// each batch is added to a taxon-major (T, C + 1) table in one sequential
-/// sweep (slot 0 takes codes outside the char set). Counts are integers, so
+/// sweep (slot 0 takes all negative codes, i.e. residues outside the char
+/// set). Counts are integers, so
 /// the result equals counting column by column.
 pub fn permuted_counts(enc: &Encoded, n_chars: usize, seed: u64) -> Vec<i64> {
     let t_n = enc.nrows;
@@ -64,7 +65,7 @@ pub fn permuted_counts(enc: &Encoded, n_chars: usize, seed: u64) -> Vec<i64> {
         for t in 0..t_n {
             let row = &mut table[t * w..(t + 1) * w];
             for k in 0..nb {
-                row[(batch[k * t_n + t] as isize + 1) as usize] += 1;
+                row[(batch[k * t_n + t].max(-1) as isize + 1) as usize] += 1;
             }
         }
         j += nb;

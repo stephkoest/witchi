@@ -7,6 +7,9 @@
 
 use std::sync::Arc;
 
+use rayon::prelude::*;
+
+use crate::alignment::Alignment;
 use crate::npy;
 
 /// An int-encoded alignment, column-major.
@@ -38,7 +41,43 @@ impl Encoded {
         Encoded { nrows, ncols, codes: Arc::new(codes), active: None, fortran: false }
     }
 
-    /// Encode a row-major byte alignment against `char_set`.
+    /// Encode `aln`'s residues in place and take them over (the alignment keeps
+    /// its records), losslessly: residues in `char_set` get codes 0..C-1 as
+    /// everywhere else, and every other byte value present gets its own
+    /// negative code (-1, -2, ...), which the kernels treat as "not in the
+    /// char set" exactly like -1. The [`Decoder`] maps codes back to residues
+    /// for the output alignment.
+    pub fn from_alignment(aln: &mut Alignment, char_set: &[u8]) -> (Self, Decoder) {
+        let mut lut = [0i8; 256];
+        let mut table = [0u8; 256];
+        for (i, &c) in char_set.iter().enumerate() {
+            lut[c as usize] = i as i8;
+            table[i] = c;
+        }
+        let mut next: i16 = -1;
+        for b in 0..=255u8 {
+            if aln.present[b as usize] && !char_set.contains(&b) {
+                assert!(next >= i8::MIN as i16, "too many distinct residues to encode");
+                lut[b as usize] = next as i8;
+                table[next as i8 as u8 as usize] = b;
+                next -= 1;
+            }
+        }
+        let (nrows, ncols) = (aln.nrows(), aln.ncols);
+        let mut bytes = std::mem::take(&mut aln.columns);
+        bytes.par_chunks_mut(1 << 20).for_each(|chunk| {
+            for v in chunk {
+                *v = lut[*v as usize] as u8;
+            }
+        });
+        // Same size and alignment: reinterpret the buffer as i8 without copying.
+        let mut bytes = std::mem::ManuallyDrop::new(bytes);
+        let codes = unsafe { Vec::from_raw_parts(bytes.as_mut_ptr() as *mut i8, bytes.len(), bytes.capacity()) };
+        (Encoded::from_codes(codes, nrows, ncols), Decoder { table })
+    }
+
+    /// Encode a row-major byte alignment against `char_set` (every byte outside
+    /// it becomes -1).
     pub fn from_rows(data: &[u8], nrows: usize, ncols: usize, char_set: &[u8]) -> Self {
         let lut = lookup_table(char_set);
         let mut codes = vec![-1i8; nrows * ncols];
@@ -89,6 +128,19 @@ impl Encoded {
             active: Some(active),
             fortran: false,
         }
+    }
+}
+
+/// Maps the codes of [`Encoded::from_alignment`] back to residues.
+#[derive(Clone, Debug)]
+pub struct Decoder {
+    table: [u8; 256],
+}
+
+impl Decoder {
+    #[inline]
+    pub fn byte(&self, code: i8) -> u8 {
+        self.table[code as u8 as usize]
     }
 }
 

@@ -176,11 +176,12 @@ impl Base {
         n_nongap.clear();
         n_nongap.resize(b, 0.0);
         for (k, col) in cols.iter().enumerate() {
-            // hist[0] counts codes outside the char set (-1), hist[c + 1] code c.
+            // hist[0] counts codes outside the char set (all negative codes),
+            // hist[c + 1] code c.
             hist.clear();
             hist.resize(c_n + 1, 0);
             for &code in col.iter() {
-                hist[(code as isize + 1) as usize] += 1;
+                hist[(code.max(-1) as isize + 1) as usize] += 1;
             }
             for c in 0..c_n {
                 count_at_col[c * b + k] = hist[c + 1] as f64;
