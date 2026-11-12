@@ -70,7 +70,7 @@ struct PruneArgs {
     #[arg(long = "no-delta-null", overrides_with = "delta_null")]
     no_delta_null: bool,
 
-    /// Rust port only: number of worker threads. Defaults to the larger of
+    /// Number of worker threads. Defaults to the larger of
     /// --num_workers_chisq and --num_workers_permute. Does not affect results
     /// (unlike --num_workers_chisq, which sets Python's column chunking).
     #[arg(long, default_value_t = 0)]
@@ -99,7 +99,7 @@ struct TestArgs {
     #[arg(long = "create_output")]
     create_output: bool,
 
-    /// Rust port only: number of worker threads (default: --num_workers_permute).
+    /// Number of worker threads (default: --num_workers_permute).
     #[arg(long, default_value_t = 0)]
     threads: usize,
 }
