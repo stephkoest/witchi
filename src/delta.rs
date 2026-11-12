@@ -537,21 +537,44 @@ pub fn null_max_deltas(
     z: Option<&ZParams>,
 ) -> Vec<f64> {
     let z = z.map(|zp| zp.clone().with_plan_for(enc.nrows));
+    // Python forces a single chunk here (num_workers 1).
+    let blocks = blocks(enc.nrows, enc.ncols, 1);
+    // With fewer permutations than the pool can keep busy, each one is also
+    // split into segments of whole blocks that run in parallel.
+    let nseg = permutation::segment_count(permutations, blocks.len(), DELTA_COST, permutation::SKIP_COST);
+    let block_starts: Vec<usize> = (0..nseg).map(|k| k * blocks.len() / nseg).collect();
     (0..permutations)
         .into_par_iter()
-        .map(|i| null_max_delta(alg, enc, n_chars, SEED_BASE + permutations as u64 + i as u64, z.as_ref()))
+        .map(|i| {
+            let seed = SEED_BASE + permutations as u64 + i as u64;
+            null_max_delta(alg, enc, n_chars, seed, z.as_ref(), &blocks, &block_starts)
+        })
         .collect()
 }
+
+/// Relative per-cell cost (ns) of a delta-null permutation, for
+/// [`permutation::segment_count`].
+const DELTA_COST: f64 = 50.0;
 
 /// Max delta of the alignment permuted with `seed`, without materializing it.
 ///
 /// Pass 1 shuffles column by column and only accumulates the counts. Pass 2
-/// restarts the generator from the same seed, so it regenerates exactly the
-/// same permuted columns, one kernel block at a time. Python forces a single
-/// chunk here (num_workers 1) and the permuted array is C-ordered.
-fn null_max_delta(alg: Algorithm, enc: &Encoded, n_chars: usize, seed: u64, z: Option<&ZParams>) -> f64 {
+/// regenerates exactly the same permuted columns, one kernel block at a time.
+/// Both run over segments of whole blocks (`block_starts`), in parallel, each
+/// segment jumping its own stream to its first column's draws. The permuted
+/// array is C-ordered.
+fn null_max_delta(
+    alg: Algorithm,
+    enc: &Encoded,
+    n_chars: usize,
+    seed: u64,
+    z: Option<&ZParams>,
+    blocks: &[(usize, usize)],
+    block_starts: &[usize],
+) -> f64 {
     let t_n = enc.nrows;
-    let counts = chi2::fudge_counts(permutation::permuted_counts(enc, n_chars, seed));
+    let segs = permutation::Segments::at_columns(enc, seed, block_starts.iter().map(|&b| blocks[b].0).collect());
+    let counts = chi2::fudge_counts(permutation::permuted_counts_in(enc, n_chars, seed, &segs));
     let initial = {
         let e = chi2::expected_observed(&counts, n_chars, t_n);
         initial_score(alg, &e, &counts, n_chars, t_n, z)
@@ -560,26 +583,32 @@ fn null_max_delta(alg: Algorithm, enc: &Encoded, n_chars: usize, seed: u64, z: O
     let plan = plan_for(alg, z, t_n);
     let reducer = Reducer::new(alg, z, plan.as_ref());
 
-    let mut rng = U32Stream::from_seed(seed);
-    let mut buf = vec![0i8; t_n * block_width(t_n).min(enc.ncols)];
-    // Python's max(): first value, then strictly greater (NaN-sticky).
-    let mut best: Option<f64> = None;
-    for (s, e) in blocks(t_n, enc.ncols, 1) {
-        let b = e - s;
-        for (k, slot) in buf[..b * t_n].chunks_exact_mut(t_n).enumerate() {
-            slot.copy_from_slice(enc.column(s + k));
-            rng.shuffle(slot);
+    let segment = |k: usize| -> Vec<f64> {
+        let b0 = block_starts[k];
+        let b1 = block_starts.get(k + 1).copied().unwrap_or(blocks.len());
+        let mut rng = U32Stream::at(seed, segs.positions[k]);
+        let mut buf = vec![0i8; t_n * block_width(t_n).min(enc.ncols)];
+        let mut out = Vec::new();
+        for &(s, e) in &blocks[b0..b1] {
+            let b = e - s;
+            for (k, slot) in buf[..b * t_n].chunks_exact_mut(t_n).enumerate() {
+                slot.copy_from_slice(enc.column(s + k));
+                rng.shuffle(slot);
+            }
+            let cols: Vec<&[i8]> = buf[..b * t_n].chunks_exact(t_n).collect();
+            out.extend(block_scores(&base, &reducer, &counts, &cols, false).into_iter().map(|v| initial - v));
         }
-        let cols: Vec<&[i8]> = buf[..b * t_n].chunks_exact(t_n).collect();
-        for v in block_scores(&base, &reducer, &counts, &cols, false) {
-            let d = initial - v;
-            best = Some(match best {
-                Some(m) if !(d > m) => m,
-                _ => d,
-            });
-        }
-    }
-    best.expect("alignment has at least one column")
+        out
+    };
+    let deltas: Vec<f64> = if block_starts.len() == 1 {
+        segment(0)
+    } else {
+        let parts: Vec<Vec<f64>> = (0..block_starts.len()).into_par_iter().map(segment).collect();
+        parts.concat()
+    };
+    // Python's max() over all columns in order (first value, then strictly
+    // greater; NaN-sticky), so it is taken over the whole list.
+    python_max(&deltas)
 }
 
 #[cfg(test)]
@@ -786,6 +815,34 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn segmented_delta_null_matches_single_segment() {
+        let n_chars = 4;
+        // T = 8000 gives 31-column blocks, so 300 columns are 10 blocks.
+        let mut enc = sample(8000, 300, n_chars);
+        let null = NullState::new(NullMatrix::compute(&enc, n_chars, 3));
+        let z = ZParams::from_null(&null).with_plan_for(enc.nrows);
+        let blocks = blocks(enc.nrows, enc.ncols, 1);
+        assert_eq!(blocks.len(), 10);
+        for alg in [Algorithm::Squared, Algorithm::Quartic, Algorithm::Wasserstein] {
+            for seed in [SEED_BASE + 3, SEED_BASE + 4] {
+                let one = null_max_delta(alg, &enc, n_chars, seed, Some(&z), &blocks, &[0]);
+                for starts in [vec![0, 4], vec![0, 1, 2, 7, 9], (0..10).collect::<Vec<_>>()] {
+                    let seg = null_max_delta(alg, &enc, n_chars, seed, Some(&z), &blocks, &starts);
+                    assert_eq!(seg.to_bits(), one.to_bits(), "{alg:?} seed {seed} starts {starts:?}");
+                }
+            }
+        }
+        // NaN deltas: Python's max over the whole list, not per segment.
+        let codes: Vec<i8> = (0..enc.ncols).flat_map(|j| enc.column(j).to_vec()).collect();
+        enc = Encoded::from_codes(codes, enc.nrows, enc.ncols);
+        let nan_z = ZParams { mean: f64::NAN, scale: 1.0, quantiles: z.quantiles.clone(), plan_cache: None }
+            .with_plan_for(enc.nrows);
+        let one = null_max_delta(Algorithm::Wasserstein, &enc, n_chars, SEED_BASE, Some(&nan_z), &blocks, &[0]);
+        let seg = null_max_delta(Algorithm::Wasserstein, &enc, n_chars, SEED_BASE, Some(&nan_z), &blocks, &[0, 5]);
+        assert_eq!(seg.to_bits(), one.to_bits());
     }
 
     #[test]
