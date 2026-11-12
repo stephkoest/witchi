@@ -23,12 +23,22 @@ Measured single-thread costs used for the estimates (1,000 × 10,000, wasserstei
 ## Status
 
 Implemented: **T1, M2, M1** (PR #10), **T2** (PR #11), **T3 and T6** (PR #12), **T4** (PR #13),
-**M3, M4, M5 and T5** (PR #14), then the main part of **T7**. **T8** was measured and left out
-(no gain). With them, all parity suites pass:
-- the 33 + 3 + 9 goldens
+**M3, M4, M5 and T5** (PR #14), then the main part of **T7** (PR #16). **T8** was measured
+and left out (no gain). With them, all parity suites pass:
+- the 33 + 5 + 9 goldens. The large tier now includes two cases at 20,000 taxa, above the
+  15,625 where the block width is clamped at 16; both match Python byte for byte.
 - the 15 intermediate cases
 - the I/O, formatting and RNG fixtures
 - the full-MSA run, byte-identical to Python
+
+**Before vs after, and a profile near the target size:** see `bench/COMPARISON.md`.
+- **Output:** on 18 cases from 100 to 200,000 taxa, the optimized binary gives the same
+  output as the pre-optimization port (`84413af`).
+- **Speed:** wall time is 2–5× lower at 10,000–50,000 taxa and 47× lower at 200,000 × 2,000.
+- **Memory:** peak memory no longer grows with the alignment size multiplied by the threads.
+- **Projection:** a profile at 200,000 × 10,000 with the defaults on 48 threads puts the
+  target size at about 27 minutes and 18 GB. The delta-null (46 %) and the prune iterations
+  (38 %) dominate.
 
 Unit tests check, bit for bit:
 - the sorted-null count against the elementwise count
@@ -485,5 +495,6 @@ per worker thread.
 5. T7 (permutation segmentation done), T8 (measured, no gain).
 
 The existing parity suite (33 + 9 goldens, 15 intermediate dumps, the large tier and the
-full-MSA reference) is the safety net for each step. Add a golden with more than 15,625
-taxa so the large-block paths are exercised.
+full-MSA reference) is the safety net for each step. The large tier now has two cases at
+20,000 taxa (`gtdb_n20000_c2000`), so the clamped block-width paths are checked against
+Python.

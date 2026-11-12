@@ -3,6 +3,9 @@
 Machine: 2 × AMD EPYC 7402 (48 cores, 96 hardware threads, 2 NUMA nodes), otherwise idle.
 Binary: the phase 8 port (before the optimizations in `OPTIMIZATION.md`).
 
+For a before/after comparison of the optimized binary (identical output, wall time, peak
+memory) and a profile near the 200,000 × 40,000 target, see `COMPARISON.md`.
+
 - **Inputs:** 9 subsets of the GTDB r237 ar53 MSA: 100 / 1,000 / 10,000 taxa ×
   100 / 1,000 / 10,000 columns, with taxa and columns evenly spaced
   (`scripts/make_bench_inputs.py`, written to `bench/data/`, not committed).
