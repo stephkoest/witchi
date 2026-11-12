@@ -281,13 +281,42 @@ impl<'a> Reducer<'a> {
                 let mut col = vec![0.0f64; t_n];
                 let mut obs = vec![0.0f64; kq];
                 let mut diffs = vec![0.0f64; kq];
+                // Fast path: x -> (x - mean) / scale is monotone (also in total
+                // order, -0.0 before +0.0) when mean is finite and scale is
+                // positive and finite, and maps NaN, and only NaN, to NaN. So
+                // the sorted z-values at the plan's ranks are the transformed
+                // raw values at those ranks: select them on the raw values and
+                // transform only those.
+                let monotone = z.mean.is_finite() && z.scale.is_finite() && z.scale > 0.0;
+                let ranks = plan.ranks();
+                let mut at_ranks = vec![0.0f64; ranks.len()];
+                let mut scratch = npy::SelectScratch::default();
                 (0..b)
                     .map(|k| {
-                        for t in 0..t_n {
-                            col[t] = (per_row[t * b + k] - z.mean) / z.scale;
+                        if monotone {
+                            let mut has_nan = false;
+                            for t in 0..t_n {
+                                let x = per_row[t * b + k];
+                                has_nan |= x.is_nan();
+                                col[t] = x;
+                            }
+                            if has_nan {
+                                // np.quantile of an array holding NaN is all NaN.
+                                obs.fill(f64::NAN);
+                            } else {
+                                npy::select_ranks(&col, ranks, &mut at_ranks, &mut scratch);
+                                for v in at_ranks.iter_mut() {
+                                    *v = (*v - z.mean) / z.scale;
+                                }
+                                plan.apply_ranked(&at_ranks, &mut obs);
+                            }
+                        } else {
+                            for t in 0..t_n {
+                                col[t] = (per_row[t * b + k] - z.mean) / z.scale;
+                            }
+                            npy::sort_nan_last(&mut col);
+                            plan.apply_sorted(&col, &mut obs);
                         }
-                        npy::sort_nan_last(&mut col);
-                        plan.apply_sorted(&col, &mut obs);
                         for i in 0..kq {
                             diffs[i] = (obs[i] - z.quantiles[i]).abs();
                         }
@@ -494,6 +523,67 @@ mod tests {
             }
         }
         Encoded::from_codes(codes, nrows, ncols)
+    }
+
+    /// The Wasserstein reducer as it was before rank selection: transform
+    /// every value, full sort, quantiles of the sorted array.
+    fn wasserstein_by_full_sort(per_row: &[f64], t_n: usize, b: usize, z: &ZParams, plan: &QuantilePlan) -> Vec<f64> {
+        let kq = z.quantiles.len();
+        (0..b)
+            .map(|k| {
+                let mut col: Vec<f64> = (0..t_n).map(|t| (per_row[t * b + k] - z.mean) / z.scale).collect();
+                npy::sort_nan_last(&mut col);
+                let mut obs = vec![0.0; kq];
+                plan.apply_sorted(&col, &mut obs);
+                let diffs: Vec<f64> = obs.iter().zip(&z.quantiles).map(|(o, q)| (o - q).abs()).collect();
+                let total = if b == 1 {
+                    npy::pairwise_sum(&diffs)
+                } else {
+                    diffs[1..].iter().fold(diffs[0], |s, d| s + d)
+                };
+                total / kq as f64
+            })
+            .collect()
+    }
+
+    #[test]
+    fn wasserstein_rank_selection_matches_full_sort() {
+        let mut state = 0x2545_f491_4f6c_dd1du64;
+        let mut unit = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        };
+        for &(t_n, b) in &[(5000usize, 3usize), (12000, 1), (700, 4), (40, 2)] {
+            let mut per_row: Vec<f64> = (0..t_n * b)
+                .map(|i| {
+                    let x = 50.0 + 30.0 * unit();
+                    if i % 997 == 0 { x * 1e6 } else { x }
+                })
+                .collect();
+            if b > 1 {
+                // A column with NaN, and infinities in another.
+                per_row[3 * b + 1] = f64::NAN;
+                per_row[5 * b] = f64::INFINITY;
+                per_row[9 * b] = f64::NEG_INFINITY;
+            }
+            let quantiles: Vec<f64> = {
+                let mut q: Vec<f64> = (0..200).map(|_| unit() * 4.0 - 2.0).collect();
+                q.sort_unstable_by(f64::total_cmp);
+                q
+            };
+            for &(mean, scale) in &[(55.0, 7.5), (65.0, 1e-300), (0.0, 1e300), (55.0, 0.0), (f64::NAN, 1.0)] {
+                let z = ZParams { mean, scale, quantiles: quantiles.clone(), plan_cache: None };
+                let plan = z.plan(t_n);
+                let reducer = Reducer::WassersteinZ { z: &z, plan: &plan };
+                let got = reducer.reduce(&per_row, t_n, b, false);
+                let want = wasserstein_by_full_sort(&per_row, t_n, b, &z, &plan);
+                for (k, (g, w)) in got.iter().zip(&want).enumerate() {
+                    assert_eq!(g.to_bits(), w.to_bits(), "T {t_n}, b {b}, col {k}, mean {mean}, scale {scale}");
+                }
+            }
+        }
     }
 
     #[test]
