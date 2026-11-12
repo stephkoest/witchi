@@ -1,0 +1,5 @@
+OK dna
+>x
+ACGT
+>y
+AGGA

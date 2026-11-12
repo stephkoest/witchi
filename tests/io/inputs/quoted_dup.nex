@@ -1,0 +1,13 @@
+#NEXUS
+BEGIN DATA;
+DIMENSIONS NTAX=6 NCHAR=8;
+FORMAT DATATYPE=DNA GAP=- MISSING=?;
+MATRIX
+'Homo sapiens' ACGTACGT
+'O''Brien'     ACGTACGA
+"double q"     ACGTACGG
+dup            ACGTACGC
+dup            ACGTAAGC
+dup            ACGTAAGG
+;
+END;

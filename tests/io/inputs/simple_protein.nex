@@ -1,0 +1,12 @@
+#NEXUS
+begin data;
+  dimensions ntax=3 nchar=12;
+  format datatype=protein missing=? gap=-;
+  matrix
+  [ a comment [nested] here ]
+  alpha MKVLAA
+        GHIKLM
+  beta  MKV-AAGHIKL?
+  gamma mkvlaaghiklm
+  ;
+end;

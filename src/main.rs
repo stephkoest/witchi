@@ -6,8 +6,8 @@
 use anyhow::{Result, bail};
 use clap::{Args, Parser, Subcommand};
 
-/// Version reported in output files (`witchi_version` in the score JSON).
-pub const WITCHI_VERSION: &str = "0.2.0";
+
+use witchi::WITCHI_VERSION;
 
 #[derive(Parser, Debug)]
 #[command(
