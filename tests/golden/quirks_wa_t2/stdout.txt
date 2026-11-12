@@ -1,0 +1,27 @@
+witchi 0.2.0
+Starting pruning workflow
+Chi² calculator using 1 worker(s)
+Permutation test using 1 worker(s)
+Pruning algorithm: wasserstein
+Initial top_n: 2
+⚠️  Sequence contains unexpected characters: ['*', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'Z']
+Defaulting to amino acid interpretation.
+Running 40 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=40): mean=0.036872, p95=0.049338
+Columns removed: 0, 0.00% | Biased taxa permutation: 2 | Alignment Z-score: 8.55 | Alignment p-value: 0.00
+Columns removed: 2, 0.50% | Biased taxa permutation: 2 | Alignment Z-score: 7.86 | Alignment p-value: 0.00
+Columns removed: 4, 1.00% | Biased taxa permutation: 2 | Alignment Z-score: 7.25 | Alignment p-value: 0.00
+Null recompute #1 on pruned alignment (396 columns); resuming pruning.
+Running 40 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=40): mean=0.043191, p95=0.058599
+Columns removed: 4, 1.00% | Biased taxa permutation: 3 | Alignment Z-score: 5.36 | Alignment p-value: 0.00
+Pruned 400 → 396 columns (-4, 1.00%) | Z 8.55 → 7.25 | p 0.00 → 0.00 | biased 2/30 → 2/30 | stop: delta not significant (p=0.225, max_delta=0.051825) | null recomputes: 1
+Pruned alignment saved to gtdb_quirks_wasserstein_s2_pruned.fasta
+Columns pruned in order saved to: gtdb_quirks_wasserstein_s2_pruned.tsv
+Taxa before/after Z and p-values printed to gtdb_quirks_wasserstein_s2_pruned_scores.tsv
+Chiscore values from permutation testing printed to gtdb_quirks_wasserstein_s2_pruned_score_dict.json
+Execution time: 0.84 seconds
