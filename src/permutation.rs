@@ -28,7 +28,7 @@ pub fn permuted(enc: &Encoded, seed: u64) -> Encoded {
     let mut codes = vec![0i8; enc.codes.len()];
     let t = enc.nrows;
     for_each_permuted_column(enc, seed, |j, col| codes[j * t..(j + 1) * t].copy_from_slice(col));
-    Encoded { nrows: enc.nrows, ncols: enc.ncols, codes }
+    Encoded { nrows: enc.nrows, ncols: enc.ncols, codes, fortran: false }
 }
 
 /// Per-taxon chi^2 of one permuted alignment.

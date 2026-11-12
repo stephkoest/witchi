@@ -132,3 +132,43 @@ fn deltas_match_python() {
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
+
+/// Ad-hoc comparison against an external dump:
+/// WITCHI_DUMP=<dump.txt> WITCHI_DUMP_INPUT=<alignment> WITCHI_DUMP_ARGS="--pruning_algorithm squared --permutations 20"
+#[test]
+#[ignore = "manual: needs WITCHI_DUMP / WITCHI_DUMP_INPUT"]
+fn external_dump_matches_python() {
+    witchi::blas::init_single_threaded();
+    let dump = std::env::var("WITCHI_DUMP").expect("WITCHI_DUMP");
+    let input = std::env::var("WITCHI_DUMP_INPUT").expect("WITCHI_DUMP_INPUT");
+    let args = std::env::var("WITCHI_DUMP_ARGS").unwrap_or_default();
+    let a: Vec<&str> = args.split_whitespace().collect();
+    let get = |k: &str, d: &str| a.iter().position(|x| *x == k).map(|i| a[i + 1].to_string()).unwrap_or(d.to_string());
+    let alg = Algorithm::parse(&get("--pruning_algorithm", "wasserstein")).unwrap();
+    let perms: usize = get("--permutations", "100").parse().unwrap();
+    let d: HashMap<String, Vec<f64>> = std::fs::read_to_string(&dump)
+        .unwrap()
+        .lines()
+        .map(|l| {
+            let mut it = l.split(' ');
+            let key = it.next().unwrap().to_string();
+            it.next();
+            (key, it.map(|h| f64::from_bits(u64::from_str_radix(h, 16).unwrap())).collect())
+        })
+        .collect();
+    let aln = read_alignment(Path::new(&input), &get("--format", "fasta")).unwrap();
+    let cs = detect_sequence_type(&aln).unwrap().char_set();
+    let enc = Encoded::from_rows(&aln.data, aln.nrows(), aln.ncols, cs);
+    let st = NullState::new(NullMatrix::compute(&enc, cs.len(), perms, 8));
+    let z = ZParams::from_null(&st);
+    let counts = chi2::fudge_counts(chi2::count_rows_raw(&enc, cs.len()));
+    let e = chi2::expected_observed(&counts, cs.len(), enc.nrows);
+    let (initial, deltas) = delta::score_and_deltas(alg, &counts, &e, &enc, cs.len(), Some(&z), 1, true);
+    let mut failures = Vec::new();
+    check("ext", "null_pooled", &st.null.pooled, &d["null_pooled"], &mut failures);
+    check("ext", "initial_score", &[initial], &d["initial_score"], &mut failures);
+    check("ext", "deltas", &deltas, &d["deltas"], &mut failures);
+    let bad: Vec<usize> = (0..deltas.len()).filter(|&i| deltas[i].to_bits() != d["deltas"][i].to_bits()).collect();
+    eprintln!("mismatching delta columns (first 40): {:?}", &bad[..bad.len().min(40)]);
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}

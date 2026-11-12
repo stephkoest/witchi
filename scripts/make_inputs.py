@@ -15,6 +15,9 @@ Small inputs (committed, tests/data/):
   gtdb_n50_c257      50 taxa, 257 columns: with T=50 the block width B is 256,
                      so the last column block has width 1 (numpy reductions
                      switch from sequential to pairwise for b == 1)
+  gtdb_n150_c600     150 taxa x 600 columns: T*B*8 = 150*256*8 >= 256 KiB, so after
+                     multi-column deletions numpy's temporary elision makes the
+                     per-row block F-ordered (pairwise axis-0 sums; PLAN.md H16)
   gtdb_quirks        30 taxa x 400 columns with lowercase residues, multi-word
                      headers, wrapped/ragged sequence lines, blank lines and
                      non-standard residues (B, Z, *) -> "unexpected characters"
@@ -153,6 +156,10 @@ def main():
     write_fasta(
         out / "gtdb_n100_c1000.faa",
         subset(src, [i * 129 for i in range(100)], 2000, 3000),
+    )
+    write_fasta(
+        out / "gtdb_n150_c600.faa",
+        subset(src, [i * 80 + 3 for i in range(150)], 8000, 8600),
     )
     write_fasta(out / "gtdb_n50_c257.faa", subset(src, list(range(100, 150)), 7000, 7257))
     make_quirks(src, out / "gtdb_quirks.faa")

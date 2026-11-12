@@ -10,7 +10,9 @@ pub mod delta;
 pub mod fasta;
 pub mod nexus;
 pub mod npy;
+pub mod output;
 pub mod permutation;
+pub mod pruner;
 pub mod pyfmt;
 pub mod rng;
 

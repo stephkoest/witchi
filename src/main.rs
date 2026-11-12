@@ -106,8 +106,18 @@ fn main() -> Result<()> {
     println!("witchi {WITCHI_VERSION}");
     match cli.command {
         Command::Prune(args) => {
-            let _ = args.delta_null_enabled();
-            bail!("prune is not implemented yet (args: {args:?})")
+            let opts = witchi::pruner::PruneOptions {
+                delta_null: args.delta_null_enabled(),
+                file: args.file,
+                format: args.format,
+                max_residue_pruned: args.max_residue_pruned,
+                permutations: args.permutations,
+                num_workers_chisq: args.num_workers_chisq,
+                num_workers_permute: args.num_workers_permute,
+                top_n: args.top_n,
+                pruning_algorithm: args.pruning_algorithm,
+            };
+            witchi::pruner::run(&opts)
         }
         Command::Test(args) => bail!("test is not implemented yet (args: {args:?})"),
     }

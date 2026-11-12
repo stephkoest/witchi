@@ -216,17 +216,42 @@ enum Reducer<'a> {
     WassersteinZ { z: &'a ZParams, plan: &'a QuantilePlan },
 }
 
+/// numpy's `NPY_MIN_ELIDE_BYTES`: temporaries at least this large are reused
+/// as the output of the next binary operation (temporary elision).
+const MIN_ELIDE_BYTES: usize = 256 * 1024;
+
+/// Whether Python's `per_row_block` for a block of width `b` is F-ordered.
+///
+/// With an F-ordered `alignment_int`, every intermediate of
+/// `_per_row_chi2_block` is F-ordered except the BLAS product `A` (C). In
+/// `S = A + tmp`, numpy elides the F-ordered temporary `tmp` (if it is at
+/// least 256 KiB) and writes the sum into it, so S and the result stay
+/// F-ordered; otherwise the new output takes C order (C wins conflicts).
+pub fn per_row_block_is_fortran(alignment_fortran: bool, nrows: usize, b: usize) -> bool {
+    alignment_fortran && b >= 2 && nrows * b * 8 >= MIN_ELIDE_BYTES
+}
+
 impl Reducer<'_> {
     /// Reduce a (T x b) row-major block to b values with numpy's operation
-    /// order: axis-0 sums are sequential for b > 1 and pairwise for b == 1.
-    fn reduce(&self, per_row: &[f64], t_n: usize, b: usize) -> Vec<f64> {
+    /// order: axis-0 sums are sequential over rows when the block is C-ordered
+    /// with b > 1, and pairwise per column when the reduced axis is contiguous
+    /// (b == 1, or an F-ordered block). Wasserstein is layout-independent
+    /// (np.quantile works on a C-ordered copy).
+    fn reduce(&self, per_row: &[f64], t_n: usize, b: usize, fortran: bool) -> Vec<f64> {
         match *self {
             Reducer::Sum | Reducer::SumOfSquares => {
                 let sq = matches!(self, Reducer::SumOfSquares);
                 let f = |x: f64| if sq { x * x } else { x };
-                if b == 1 {
-                    let v: Vec<f64> = per_row.iter().map(|&x| f(x)).collect();
-                    return vec![npy::pairwise_sum(&v)];
+                if b == 1 || fortran {
+                    let mut col = vec![0.0f64; t_n];
+                    return (0..b)
+                        .map(|k| {
+                            for t in 0..t_n {
+                                col[t] = f(per_row[t * b + k]);
+                            }
+                            npy::pairwise_sum(&col)
+                        })
+                        .collect();
                 }
                 let mut acc: Vec<f64> = per_row[..b].iter().map(|&x| f(x)).collect();
                 for t in 1..t_n {
@@ -298,7 +323,8 @@ pub fn column_deltas(
     let blocks = blocks(t_n, enc.ncols, num_workers_chisq);
     let run = |&(s, e): &(usize, usize)| {
         let (per_row, zero) = base.per_row_block(s, e);
-        (reducer.reduce(&per_row, t_n, e - s), zero)
+        let fortran = per_row_block_is_fortran(enc.fortran, t_n, e - s);
+        (reducer.reduce(&per_row, t_n, e - s, fortran), zero)
     };
     let results: Vec<(Vec<f64>, Vec<bool>)> = if parallel {
         blocks.par_iter().map(run).collect()
@@ -325,7 +351,7 @@ pub fn column_deltas(
         }
         let e = chi2::expected_observed(&cc, n_chars, t_n);
         let per_row = chi2::row_chi2(&e, &cc, n_chars, t_n);
-        out[j] = reducer.reduce(&per_row, t_n, 1)[0];
+        out[j] = reducer.reduce(&per_row, t_n, 1, false)[0];
     }
     out.iter().map(|&v| initial - v).collect()
 }
