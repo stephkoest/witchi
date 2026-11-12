@@ -1,0 +1,5 @@
+OK unexpected:ACGU
+>r1
+ACGUU
+>r2
+ACGUN

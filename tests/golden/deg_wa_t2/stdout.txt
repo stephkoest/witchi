@@ -1,0 +1,37 @@
+witchi 0.2.0
+Starting pruning workflow
+Chi² calculator using 1 worker(s)
+Permutation test using 1 worker(s)
+Pruning algorithm: wasserstein
+Initial top_n: 2
+Detected DNA sequence.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=20): mean=0.133681, p95=0.239456
+Columns removed: 0, 0.00% | Biased taxa permutation: 5 | Alignment Z-score: 19.78 | Alignment p-value: 0.00
+Columns removed: 2, 3.33% | Biased taxa permutation: 4 | Alignment Z-score: 17.39 | Alignment p-value: 0.00
+Columns removed: 4, 6.67% | Biased taxa permutation: 4 | Alignment Z-score: 15.45 | Alignment p-value: 0.00
+Columns removed: 6, 10.00% | Biased taxa permutation: 3 | Alignment Z-score: 13.67 | Alignment p-value: 0.00
+Null recompute #1 on pruned alignment (54 columns); resuming pruning.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=20): mean=0.112574, p95=0.155243
+Columns removed: 6, 10.00% | Biased taxa permutation: 2 | Alignment Z-score: 15.43 | Alignment p-value: 0.00
+Columns removed: 8, 13.33% | Biased taxa permutation: 2 | Alignment Z-score: 13.50 | Alignment p-value: 0.00
+Columns removed: 10, 16.67% | Biased taxa permutation: 2 | Alignment Z-score: 11.86 | Alignment p-value: 0.00
+Columns removed: 12, 20.00% | Biased taxa permutation: 1 | Alignment Z-score: 10.09 | Alignment p-value: 0.00
+Columns removed: 14, 23.33% | Biased taxa permutation: 1 | Alignment Z-score: 8.67 | Alignment p-value: 0.00
+Touchdown: delta-null partial batch (rank 2 fails at p=0.100, delta=0.154192). Rolled back 2 columns, reduced top_n to 1, resuming pruning.
+Columns removed: 12, 20.00% | Biased taxa permutation: 1 | Alignment Z-score: 10.09 | Alignment p-value: 0.00
+Columns removed: 13, 21.67% | Biased taxa permutation: 1 | Alignment Z-score: 9.26 | Alignment p-value: 0.00
+Columns removed: 14, 23.33% | Biased taxa permutation: 1 | Alignment Z-score: 8.67 | Alignment p-value: 0.00
+Columns removed: 15, 25.00% | Biased taxa permutation: 1 | Alignment Z-score: 7.89 | Alignment p-value: 0.00
+Columns removed: 16, 26.67% | Biased taxa permutation: 1 | Alignment Z-score: 7.16 | Alignment p-value: 0.00
+Pruned 60 → 44 columns (-16, 26.67%) | Z 19.78 → 6.25 | p 0.00 → 0.00 | biased 5/12 → 1/12 | stop: delta not significant (p=0.100, max_delta=0.146474) | null recomputes: 1
+Pruned alignment saved to dna_degenerate_wasserstein_s2_pruned.fasta
+Columns pruned in order saved to: dna_degenerate_wasserstein_s2_pruned.tsv
+Taxa before/after Z and p-values printed to dna_degenerate_wasserstein_s2_pruned_scores.tsv
+Chiscore values from permutation testing printed to dna_degenerate_wasserstein_s2_pruned_score_dict.json
+Execution time: 0.20 seconds

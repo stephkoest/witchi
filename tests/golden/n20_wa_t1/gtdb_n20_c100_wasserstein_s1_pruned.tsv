@@ -1,0 +1,3 @@
+Iteration	Original Index	Global ChiScore	Initial Significant ChiScore	ChiScore Difference	Significant taxa	Null-Pvalue	Algorithm
+1	37	204.37670082555556	0.4184829670293307	0.11875620960901484	0	0.05	wasserstein
+2	14	199.2276806620804	0.29972675742031635	0.1327701714994075	0	0.05	wasserstein

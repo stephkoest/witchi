@@ -1,0 +1,5 @@
+OK unexpected:ACGT
+>a
+ACGT
+>b
+ACGTT

@@ -1,0 +1,33 @@
+witchi 0.2.0
+Starting pruning workflow
+Chi² calculator using 1 worker(s)
+Permutation test using 1 worker(s)
+Pruning algorithm: wasserstein
+Initial top_n: 10
+Detected DNA sequence.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=20): mean=0.064655, p95=0.079271
+Columns removed: 0, 0.00% | Biased taxa permutation: 5 | Alignment Z-score: 48.48 | Alignment p-value: 0.00
+Columns removed: 10, 0.79% | Biased taxa permutation: 5 | Alignment Z-score: 38.13 | Alignment p-value: 0.00
+Columns removed: 20, 1.57% | Biased taxa permutation: 5 | Alignment Z-score: 29.92 | Alignment p-value: 0.00
+Columns removed: 30, 2.36% | Biased taxa permutation: 4 | Alignment Z-score: 22.87 | Alignment p-value: 0.00
+Columns removed: 40, 3.14% | Biased taxa permutation: 4 | Alignment Z-score: 17.45 | Alignment p-value: 0.00
+Columns removed: 50, 3.93% | Biased taxa permutation: 3 | Alignment Z-score: 12.90 | Alignment p-value: 0.00
+Columns removed: 60, 4.71% | Biased taxa permutation: 3 | Alignment Z-score: 9.77 | Alignment p-value: 0.00
+Columns removed: 70, 5.50% | Biased taxa permutation: 1 | Alignment Z-score: 7.71 | Alignment p-value: 0.00
+Columns removed: 80, 6.28% | Biased taxa permutation: 1 | Alignment Z-score: 5.60 | Alignment p-value: 0.00
+Columns removed: 90, 7.07% | Biased taxa permutation: 1 | Alignment Z-score: 2.93 | Alignment p-value: 0.05
+Null recompute #1 on pruned alignment (1183 columns); resuming pruning.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Computing null delta distribution for stopping criterion...
+Null max-delta distribution (n=20): mean=0.095959, p95=0.139595
+Columns removed: 90, 7.07% | Biased taxa permutation: 1 | Alignment Z-score: 6.17 | Alignment p-value: 0.05
+Pruned 1273 → 1183 columns (-90, 7.07%) | Z 48.48 → 2.93 | p 0.00 → 0.05 | biased 5/5 → 1/5 | stop: delta not significant (p=0.200, max_delta=0.111906) | null recomputes: 1
+Pruned alignment saved to example_wasserstein_s10_pruned.fasta
+Columns pruned in order saved to: example_wasserstein_s10_pruned.tsv
+Taxa before/after Z and p-values printed to example_wasserstein_s10_pruned_scores.tsv
+Chiscore values from permutation testing printed to example_wasserstein_s10_pruned_score_dict.json
+Execution time: 0.61 seconds

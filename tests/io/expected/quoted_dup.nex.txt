@@ -1,0 +1,13 @@
+OK dna
+>Homo sapiens
+ACGTACGT
+>O'Brien
+ACGTACGA
+>double q
+ACGTACGG
+>dup
+ACGTACGC
+>dup.copy
+ACGTAAGC
+>dup.copy1
+ACGTAAGG

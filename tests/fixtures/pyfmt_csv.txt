@@ -1,0 +1,5 @@
+Row	a b	"tab	here"	"quote""inside"	"nl
+x"	"crx"		plain
+""
+x	
+'single'	comma,ok	ünï

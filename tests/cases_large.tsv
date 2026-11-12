@@ -1,0 +1,6 @@
+# Large-tier golden scenarios (refs not committed; see scripts/make_golden.sh --large).
+# Inputs: scripts/make_inputs.py --large SOURCE tests/golden_large/data
+# T*L = 6e6 >= 5e6, so --num_workers_chisq > 1 changes the column chunking (hazard H15).
+n1000_sq_t10_w1	gtdb_n1000_c6000.faa	--pruning_algorithm squared --top_n 10 --permutations 20 --max_residue_pruned 60
+n1000_sq_t10_w4	gtdb_n1000_c6000.faa	--pruning_algorithm squared --top_n 10 --permutations 20 --max_residue_pruned 60 --num_workers_chisq 4
+n1000_wa_t10_w3	gtdb_n1000_c6000.faa	--pruning_algorithm wasserstein --top_n 10 --permutations 20 --max_residue_pruned 60 --num_workers_chisq 3 --num_workers_permute 8

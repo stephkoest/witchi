@@ -1,0 +1,35 @@
+{
+    "schema_version": 3,
+    "witchi_version": "0.2.0",
+    "stop_reason": "delta not significant (p=0.060, max_delta=8.542055)",
+    "none": null,
+    "tricky": "q\"b\\s/\n\r\t\b\f\u0001\u007f \u00e9 \u2713 \ud834\udd1e end",
+    "floats": [
+        0.0,
+        -0.0,
+        1.5,
+        1e-07,
+        1e+16,
+        Infinity,
+        -Infinity,
+        NaN
+    ],
+    "nested": [
+        [
+            1.0,
+            2.5
+        ],
+        [],
+        [
+            3.25
+        ]
+    ],
+    "empty_obj": {},
+    "obj": {
+        "k": [
+            1,
+            2
+        ],
+        "z": 0
+    }
+}

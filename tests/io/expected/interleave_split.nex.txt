@@ -1,0 +1,5 @@
+OK dna
+>first
+ACGTACCC
+>second
+ACGAATCC
