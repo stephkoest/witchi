@@ -2,7 +2,7 @@
 """Compare two witchi binaries: identical output, wall time and peak memory.
 
 Usage:
-    python3 -I scripts/bench_compare.py CASES.tsv OUT_DIR NAME=BINARY NAME=BINARY [--reps N]
+    python3 -I scripts/bench_compare.py CASES.tsv OUT_DIR NAME=BINARY [NAME=BINARY ...] [--reps N]
 
 CASES.tsv has tab-separated columns: case name, input path (relative to the
 repository root or absolute), repetitions (0 = use --reps), and the `witchi
@@ -103,7 +103,7 @@ def main():
         i = args.index("--reps")
         reps = int(args[i + 1])
         del args[i : i + 2]
-    if len(args) < 4:
+    if len(args) < 3:
         sys.exit(__doc__)
     cases_path, out_dir = args[:2]
     binaries = [a.split("=", 1) for a in args[2:]]
