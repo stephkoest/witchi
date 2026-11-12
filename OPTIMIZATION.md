@@ -22,8 +22,8 @@ Measured single-thread costs used for the estimates (1,000 × 10,000, wasserstei
 
 ## Status
 
-Implemented: **T1, M2, M1** (PR #10), **T2** (PR #11), then **T3 and T6**. With them, all parity
-suites pass:
+Implemented: **T1, M2, M1** (PR #10), **T2** (PR #11), **T3 and T6** (PR #12), then **T4**. With
+them, all parity suites pass:
 - the 33 + 3 + 9 goldens
 - the 15 intermediate cases
 - the I/O, formatting and RNG fixtures
@@ -36,6 +36,9 @@ Unit tests check, bit for bit:
 - the Wasserstein reducer against the old sort-based reducer
 - the column-major kernel and reducers against the old row-major ones (all algorithms,
   C- and F-ordered blocks, widths 1–37, row counts across the 128-row tile)
+- the batched 32-bit draw stream and two-phase shuffle against numpy's draw-by-draw
+  shuffle (sizes 0–70,001 around powers of two, many shuffles on one stream), and the
+  batched permuted counts against column-by-column counting
 
 ### T1, M2, M1
 
@@ -81,11 +84,29 @@ binary for all three algorithms.
 | 10,000 × 10,000 (96 threads) | wasserstein | 21.6 → 19.1 | 10.9 → 9.5 | 5.5 → 4.5 |
 | Full MSA 12,944 × 13,540 | wasserstein | 12.5 → 12.1 | 7.4 → 7.2 | 0.73 → 0.59 |
 
+### T4
+
+Same synthetic input and settings as T3/T6 (32 threads); every output file is byte-identical
+to the previous binary for all three algorithms:
+
+| Input | Algorithm | Wall (s) | Null matrix (s) | Delta-null (s) |
+|---|---|---|---|---|
+| 51,776 × 2,000 | wasserstein | 11.1 → 9.4 | 1.71 → 1.00 | 5.46 → 4.83 |
+| 51,776 × 2,000 | squared | 11.2 → 8.8 | 2.18 → 0.72 | 5.12 → 4.14 |
+| 51,776 × 2,000 | quartic | 10.3 → 7.3 | 1.66 → 1.04 | 4.99 → 3.06 |
+| 10,000 × 10,000 (32 threads) | wasserstein | 26.7 → 24.8 | 4.32 → 2.85 | 14.4 → 12.8 |
+| 10,000 × 10,000 (96 threads) | wasserstein | 19.1 → 17.1 | 2.53 → 1.52 | 9.50 → 8.41 |
+| Full MSA 12,944 × 13,540 | wasserstein | 12.1 → 10.4 | 2.37 → 1.64 | 7.22 → 5.96 |
+
+Peak RSS rises by about 5 % (1.49 → 1.57 GB on the synthetic input). Each permutation
+in flight now holds a batch of 32 shuffled columns and a (T, C + 1) `u32` count table.
+At 200,000 taxa that is about 23 MB per thread, against 32 MB for the `i64` counts it
+already held.
+
 Next by impact:
-- T4: the shuffle now dominates the null matrix and a large share of the delta-null,
-  which shuffles every column twice.
 - The memory items M3–M5, which the target size needs.
 - T7.
+- T5 and T8.
 
 ## What breaks first at 200,000 × 40,000
 
@@ -265,17 +286,32 @@ per worker thread.
   time, plus a second branch for the buffered 32-bit half. About 10 ns per cell, which
   points to branch mispredictions rather than arithmetic. The counts are then scattered
   into a 32 MB (C, T) array of `i64` once per column.
-- **Change:**
-  - Generate raw 32-bit draws into a small buffer and filter them without branches
-    (store the candidate, advance the write index by the accept flag). The mask only
-    changes when the bound crosses a power of two, so run one tight loop per power-of-two
-    range.
-  - Shuffle several columns, then add their counts in one sweep over the taxa; use
-    `u32` counts and widen at the end.
-- **Identical because:** the generator emits the same stream and the same draws are
-  accepted; counts are integers.
-- **Effect:** perhaps 2–3× on the null matrix and on the shuffle part of the
-  delta-null. It also makes M1's second pass cheap.
+- **Done** (`rng::U32Stream`, `permutation::permuted_counts`):
+  - **Draw stream:** numpy's 32-bit draws (the low, then the high half of each 64-bit
+    output) are generated 512 at a time.
+  - **Two-phase shuffle:**
+    - Phase 1 runs `random_interval`'s accept/reject process for every position without
+      unpredictable branches. Within a power-of-two range the mask is constant, and a
+      rejected draw's target is overwritten by the next one.
+    - Phase 2 applies the swaps in numpy's order.
+    - A first, fully branch-free version that swapped as it went was slower: 9.8 ns per
+      cell against 7.4. Each rejected draw then waited on the swap's memory traffic.
+  - **Batched counting:** 32 shuffled columns are added to a taxa-major (T, C + 1)
+    `u32` table in one sequential sweep. Slot 0 takes codes outside the char set. The
+    table is widened to (C, T) `i64` at the end. Both the null matrix and the
+    delta-null's first pass use this.
+- **Identical because:**
+  - The stream is the same sequence of draws.
+  - Phase 1 yields exactly the values `random_interval` returns, consuming the same
+    draws.
+  - The swaps are applied in the same order.
+  - Counts are integers.
+- **Effect:**
+  - Shuffle: 7.4 → 4.1 ns per cell at T = 10,000, and 7.6 → 4.3 at T = 200,000
+    (`examples/shuffle_bench.rs`).
+  - Counting at T = 200,000: the per-column scatter cost 7.4–8.4 ns per cell, because
+    the 32 MB `i64` table falls out of cache. The batched sweep removes that.
+  - See Status for whole-run numbers.
 
 ### T5. Encoding: tiled, parallel transpose
 
@@ -344,8 +380,9 @@ per worker thread.
 
 1. T1, M2, M1 — small, contained, and they remove the hard blockers (done).
 2. T2, T3, T6 — the kernel; verify against `tests/intermediates` and the goldens (done).
-3. M3, M4, M5, T5 — the I/O path, done together because they share the storage change.
-4. T4, T7, T8.
+3. T4 (done).
+4. M3, M4, M5, T5 — the I/O path, done together because they share the storage change.
+5. T7, T8.
 
 The existing parity suite (33 + 9 goldens, 15 intermediate dumps, the large tier and the
 full-MSA reference) is the safety net for each step. Add a golden with more than 15,625

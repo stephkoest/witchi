@@ -155,6 +155,111 @@ impl Pcg64 {
     }
 }
 
+/// numpy's stream of 32-bit draws from a PCG64 (`next_uint32`: the low then the
+/// high half of each 64-bit output), generated in batches, with a branch-free
+/// `Generator.shuffle` on top.
+///
+/// Use it in place of [`Pcg64::shuffle`] when a generator does nothing but
+/// shuffle: it consumes exactly the same draws in the same order, so it gives
+/// the same permutations and leaves the stream at the same point.
+pub struct U32Stream {
+    rng: Pcg64,
+    buf: Box<[u32; Self::BATCH]>,
+    pos: usize,
+    len: usize,
+    /// Scratch for the swap targets of [`shuffle`](Self::shuffle).
+    targets: Vec<u32>,
+}
+
+impl U32Stream {
+    const BATCH: usize = 512;
+
+    pub fn new(mut rng: Pcg64) -> Self {
+        let mut stream =
+            U32Stream { rng: rng.clone(), buf: Box::new([0; Self::BATCH]), pos: 0, len: 0, targets: Vec::new() };
+        // A pending buffered half comes first, as in next_uint32.
+        if rng.has_uint32 {
+            rng.has_uint32 = false;
+            stream.buf[0] = rng.uinteger;
+            stream.len = 1;
+            stream.rng = rng;
+        }
+        stream
+    }
+
+    /// `np.random.default_rng(seed)`, used only for 32-bit draws.
+    pub fn from_seed(seed: u64) -> Self {
+        U32Stream::new(Pcg64::from_seed(seed))
+    }
+
+    #[inline]
+    fn refill(&mut self) {
+        for k in 0..Self::BATCH / 2 {
+            let x = self.rng.next_u64();
+            self.buf[2 * k] = x as u32;
+            self.buf[2 * k + 1] = (x >> 32) as u32;
+        }
+        self.pos = 0;
+        self.len = Self::BATCH;
+    }
+
+    /// The next 32-bit draw (`next_uint32`).
+    #[inline]
+    pub fn next_u32(&mut self) -> u32 {
+        if self.pos == self.len {
+            self.refill();
+        }
+        let v = self.buf[self.pos];
+        self.pos += 1;
+        v
+    }
+
+    /// `Generator.shuffle` of a 1-D buffer: Fisher–Yates from the end with
+    /// `random_interval(i)` (mask rejection on 32-bit draws).
+    ///
+    /// Two phases. First the swap targets: for each position i = n-1 .. 1 the
+    /// first draw whose masked value is <= i, which is exactly what
+    /// `random_interval(i)` returns. Within a power-of-two range the mask is
+    /// constant, so each draw costs a mask, a compare and a subtract, with no
+    /// unpredictable branch (a rejected draw's target is overwritten by the
+    /// next one). Then the swaps, in the same order as numpy. Same draws, same
+    /// targets, same permutation, same stream position afterwards.
+    pub fn shuffle<T: Copy>(&mut self, items: &mut [T]) {
+        let n = items.len();
+        if n < 2 {
+            return;
+        }
+        assert!(n - 1 <= u32::MAX as usize, "shuffle bound exceeds 32 bits");
+        let mut targets = std::mem::take(&mut self.targets);
+        targets.clear();
+        targets.resize(n, 0);
+        let mut i = (n - 1) as u32;
+        while i >= 1 {
+            // Positions [lo, i] share the mask 2^(k+1) - 1.
+            let lo = 1u32 << (31 - i.leading_zeros());
+            let mask = lo.wrapping_shl(1).wrapping_sub(1) | lo;
+            while i >= lo {
+                if self.pos == self.len {
+                    self.refill();
+                }
+                for &v in &self.buf[self.pos..self.len] {
+                    let j = v & mask;
+                    targets[i as usize] = j;
+                    i -= (j <= i) as u32;
+                    self.pos += 1;
+                    if i < lo {
+                        break;
+                    }
+                }
+            }
+        }
+        for i in (1..n).rev() {
+            items.swap(i, targets[i] as usize);
+        }
+        self.targets = targets;
+    }
+}
+
 /// Visit each column of a row-major `nrows x ncols` matrix after shuffling it
 /// independently, in column order, with one generator seeded by `seed` —
 /// exactly `np.apply_along_axis(default_rng(seed).permutation, 0, matrix)`.
@@ -167,7 +272,7 @@ pub fn for_each_permuted_column<T: Copy>(
     seed: u64,
     mut visit: impl FnMut(usize, &[T]),
 ) {
-    let mut rng = Pcg64::from_seed(seed);
+    let mut rng = U32Stream::from_seed(seed);
     let mut col: Vec<T> = Vec::with_capacity(nrows);
     for j in 0..ncols {
         col.clear();
@@ -186,4 +291,50 @@ pub fn permute_columns<T: Copy + Default>(data: &[T], nrows: usize, ncols: usize
         }
     });
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn u32_stream_draws_match_next_u32() {
+        for seed in [0u64, 1, 12345, 12345 + 100, u64::MAX] {
+            let mut a = Pcg64::from_seed(seed);
+            let mut b = U32Stream::from_seed(seed);
+            for _ in 0..5000 {
+                assert_eq!(a.next_u32(), b.next_u32());
+            }
+        }
+        // A generator with a buffered half pending.
+        let mut a = Pcg64::from_seed(7);
+        a.next_u32();
+        let mut b = U32Stream::new(a.clone());
+        for _ in 0..3000 {
+            assert_eq!(a.next_u32(), b.next_u32());
+        }
+    }
+
+    #[test]
+    fn u32_stream_shuffle_matches_reference() {
+        let mut sizes: Vec<usize> = vec![0, 1, 2, 3, 4, 5, 7, 8, 9, 100, 255, 256, 257, 511, 512, 513, 1000];
+        for k in [10u32, 12, 16] {
+            sizes.extend([(1usize << k) - 1, 1 << k, (1 << k) + 1]);
+        }
+        sizes.push(70_001);
+        for seed in [12345u64, 12345 + 37, 999] {
+            // One stream across many shuffles, like one generator across the
+            // columns of an alignment: the carry-over between them must match.
+            let mut reference = Pcg64::from_seed(seed);
+            let mut stream = U32Stream::from_seed(seed);
+            for (round, &n) in sizes.iter().chain(sizes.iter().rev()).enumerate() {
+                let mut want: Vec<u32> = (0..n as u32).collect();
+                let mut got = want.clone();
+                reference.shuffle(&mut want);
+                stream.shuffle(&mut got);
+                assert_eq!(got, want, "seed {seed}, round {round}, n {n}");
+            }
+            assert_eq!(stream.next_u32(), reference.next_u32(), "stream position after shuffles");
+        }
+    }
 }
