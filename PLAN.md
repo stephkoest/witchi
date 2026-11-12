@@ -175,6 +175,18 @@ Port literally, keeping every quirk:
   (including > 2^32 entropy) and `apply_along_axis(permutation)` for 5 shapes up to
   70000 × 2.
 
+## 5d. Phase 3 status (done)
+
+- `src/npy.rs`: pairwise sum, mean, median, kth order statistic, linspace,
+  linear quantile (`QuantilePlan` + `_lerp`), percentile.
+- `src/chi2.rs`: column-major int8 encoding, counts with the +1 fudge, expected values,
+  per-taxon / global / quartic chi².
+- `src/permutation.rs`: permutation null (rayon over permutations, collected in index
+  order), empirical p-values, robust Z (`RobustStats`), `NullState`, biased-taxa threshold.
+- `scripts/dump_intermediates.py` + `tests/intermediates.tsv`: hex dumps of Python
+  internals for 15 cases. `tests/intermediates.rs` matches every null-state array bit
+  for bit.
+
 ## 6. Decisions (agreed 2026-11-12)
 
 - **BLAS**: both backends. The OpenBLAS FFI backend is the default and gives exact parity.
