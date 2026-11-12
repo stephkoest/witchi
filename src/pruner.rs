@@ -522,12 +522,13 @@ fn run_inner(opts: &PruneOptions) -> Result<()> {
     println!("Initial top_n: {}", opts.top_n);
 
     let t0 = Instant::now();
-    let aln: Alignment = alignment::read_alignment(Path::new(&opts.file), &opts.format)?;
+    let mut aln: Alignment = alignment::read_alignment(Path::new(&opts.file), &opts.format)?;
     timing("read alignment", t0);
     let seq_type = alignment::detect_sequence_type(&aln)?;
     println!("{}", seq_type.message());
     let char_set = seq_type.char_set();
-    let enc = Encoded::from_rows(&aln.data, aln.nrows(), aln.ncols, char_set);
+    // The residues now live only in `enc` (encoded losslessly).
+    let (enc, decoder) = Encoded::from_alignment(&mut aln, char_set);
 
     let mut pruner = Pruner {
         opts,
@@ -543,7 +544,7 @@ fn run_inner(opts: &PruneOptions) -> Result<()> {
     let result = recursive_prune(&mut pruner, &enc, null)?;
 
     let t0 = Instant::now();
-    let files = output::write_all(opts, alg, &aln, &original_null, &result)?;
+    let files = output::write_all(opts, alg, &aln, &enc, &decoder, &original_null, &result)?;
     timing("write outputs", t0);
 
     let n_taxa = aln.nrows();

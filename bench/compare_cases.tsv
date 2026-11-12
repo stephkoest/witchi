@@ -1,0 +1,27 @@
+# Cases for scripts/bench_compare.py: name, input, repetitions (0 = --reps), witchi prune args.
+# Inputs: scripts/make_bench_inputs.py (gtdb_t*_c*), scripts/make_scale_inputs.py (gtdb_syn_*),
+# scripts/make_inputs.py --large (gtdb_n20000_c2000), the source MSA, and the full MSA stacked
+# four times with 2,000 evenly spaced columns (gtdb_stack4_t51776_c2000).
+#
+# Scaling grid, defaults (wasserstein, 100 permutations, top_n 1, cap 100), 32 threads.
+t100_c100_w32	bench/data/gtdb_t100_c100.faa	0	--num_workers_chisq 32 --num_workers_permute 32
+t100_c1000_w32	bench/data/gtdb_t100_c1000.faa	0	--num_workers_chisq 32 --num_workers_permute 32
+t100_c10000_w32	bench/data/gtdb_t100_c10000.faa	0	--num_workers_chisq 32 --num_workers_permute 32
+t1000_c100_w32	bench/data/gtdb_t1000_c100.faa	0	--num_workers_chisq 32 --num_workers_permute 32
+t1000_c1000_w32	bench/data/gtdb_t1000_c1000.faa	0	--num_workers_chisq 32 --num_workers_permute 32
+t1000_c10000_w32	bench/data/gtdb_t1000_c10000.faa	0	--num_workers_chisq 32 --num_workers_permute 32
+t10000_c100_w32	bench/data/gtdb_t10000_c100.faa	0	--num_workers_chisq 32 --num_workers_permute 32
+t10000_c1000_w32	bench/data/gtdb_t10000_c1000.faa	0	--num_workers_chisq 32 --num_workers_permute 32
+t10000_c10000_w32	bench/data/gtdb_t10000_c10000.faa	0	--num_workers_chisq 32 --num_workers_permute 32
+# Same defaults, 96 threads and 1 thread.
+t10000_c10000_w96	bench/data/gtdb_t10000_c10000.faa	0	--num_workers_chisq 96 --num_workers_permute 96
+t1000_c1000_w1	bench/data/gtdb_t1000_c1000.faa	1	
+t1000_c10000_w1	bench/data/gtdb_t1000_c10000.faa	1	
+t10000_c1000_w1	bench/data/gtdb_t10000_c1000.faa	1	
+# Full source MSA (12,944 x 13,540): top_n 10, 20 permutations, cap 50, 32 threads.
+full_msa_w32	test_data/gtdb_r237_ar53_concatenated.masked.faa	0	--top_n 10 --permutations 20 --max_residue_pruned 50 --num_workers_chisq 32 --num_workers_permute 32
+# Beyond 15,625 taxa (block width clamped at 16): top_n 10, 20 permutations, cap 50, 32 threads.
+t20000_c2000_w32	tests/golden_large/data/gtdb_n20000_c2000.faa	0	--top_n 10 --permutations 20 --max_residue_pruned 50 --num_workers_chisq 32 --num_workers_permute 32
+t51776_c2000_w32	bench/data/gtdb_stack4_t51776_c2000.faa	0	--top_n 10 --permutations 20 --max_residue_pruned 50 --num_workers_chisq 32 --num_workers_permute 32
+t100000_c2000_w32	bench/data/gtdb_syn_t100000_c2000.faa	1	--top_n 10 --permutations 20 --max_residue_pruned 50 --num_workers_chisq 32 --num_workers_permute 32
+t200000_c2000_w32	bench/data/gtdb_syn_t200000_c2000.faa	1	--top_n 10 --permutations 20 --max_residue_pruned 50 --num_workers_chisq 32 --num_workers_permute 32

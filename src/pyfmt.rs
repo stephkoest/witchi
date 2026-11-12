@@ -128,7 +128,7 @@ impl Json {
         out
     }
 
-    fn write_indented(&self, out: &mut String, level: usize) {
+    pub(crate) fn write_indented(&self, out: &mut String, level: usize) {
         match self {
             Json::Null => out.push_str("null"),
             Json::Int(i) => {
@@ -174,11 +174,30 @@ impl Json {
     }
 }
 
-fn newline_indent(out: &mut String, level: usize) {
+pub(crate) fn newline_indent(out: &mut String, level: usize) {
     out.push('\n');
     for _ in 0..level * 4 {
         out.push(' ');
     }
+}
+
+/// A list of floats at nesting `level`, exactly as [`Json::dumps_indent4`]
+/// writes `Json::List` of `Json::Float` there (for streaming large arrays).
+pub(crate) fn json_float_list(out: &mut String, values: &[f64], level: usize) {
+    if values.is_empty() {
+        out.push_str("[]");
+        return;
+    }
+    out.push('[');
+    for (i, &v) in values.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        newline_indent(out, level + 1);
+        out.push_str(&json_float(v));
+    }
+    newline_indent(out, level);
+    out.push(']');
 }
 
 /// Python `json` float encoding (`float.__repr__`, plus NaN/Infinity).
@@ -193,7 +212,7 @@ pub fn json_float(x: f64) -> String {
 }
 
 /// Python `json` string encoding with `ensure_ascii=True`.
-fn json_string(out: &mut String, s: &str) {
+pub(crate) fn json_string(out: &mut String, s: &str) {
     out.push('"');
     for c in s.chars() {
         match c {
@@ -272,5 +291,24 @@ mod tests {
             v.dumps_indent4(),
             "{\n    \"a\": 3,\n    \"b\": [\n        1.0,\n        null\n    ],\n    \"c\": []\n}"
         );
+    }
+}
+
+#[cfg(test)]
+mod float_list_tests {
+    use super::*;
+
+    #[test]
+    fn json_float_list_matches_json_tree() {
+        let vals = [0.0, -0.0, 1.5, f64::NAN, f64::INFINITY, -f64::INFINITY, 1e-300, 123456789.0];
+        for n in [0usize, 1, 3, vals.len()] {
+            for level in 0..4 {
+                let mut want = String::new();
+                Json::List(vals[..n].iter().map(|&v| Json::Float(v)).collect()).write_indented(&mut want, level);
+                let mut got = String::new();
+                json_float_list(&mut got, &vals[..n], level);
+                assert_eq!(got, want, "n {n}, level {level}");
+            }
+        }
     }
 }

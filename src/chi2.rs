@@ -5,6 +5,11 @@
 //!   index into the char set or -1 (gap / not in the char set);
 //! * counts and expected values are (C, T) row-major: `x[c * T + t]`.
 
+use std::sync::Arc;
+
+use rayon::prelude::*;
+
+use crate::alignment::Alignment;
 use crate::npy;
 
 /// An int-encoded alignment, column-major.
@@ -14,16 +19,65 @@ use crate::npy;
 /// returns an F-ordered array, deleting a single column keeps the current
 /// order, and the touchdown rollback re-encodes it C-ordered. The order is
 /// observable: see `delta::Reducer`.
+///
+/// Storage is a shared, immutable column-major code matrix plus the list of
+/// its columns that are still active, so cloning and deleting columns never
+/// copy the codes (column `j` of the view is stored column `active[j]`).
 #[derive(Clone, Debug)]
 pub struct Encoded {
     pub nrows: usize,
     pub ncols: usize,
-    pub codes: Vec<i8>,
+    codes: Arc<Vec<i8>>,
+    /// Stored column index of each active column; `None` = all, in order.
+    active: Option<Arc<[u32]>>,
     pub fortran: bool,
 }
 
 impl Encoded {
-    /// Encode a row-major byte alignment against `char_set`.
+    /// Wrap a column-major code matrix (`codes[j * nrows + t]`), C-ordered.
+    pub fn from_codes(codes: Vec<i8>, nrows: usize, ncols: usize) -> Self {
+        assert_eq!(codes.len(), nrows * ncols, "code matrix size");
+        assert!(ncols <= u32::MAX as usize, "too many columns");
+        Encoded { nrows, ncols, codes: Arc::new(codes), active: None, fortran: false }
+    }
+
+    /// Encode `aln`'s residues in place and take them over (the alignment keeps
+    /// its records), losslessly: residues in `char_set` get codes 0..C-1 as
+    /// everywhere else, and every other byte value present gets its own
+    /// negative code (-1, -2, ...), which the kernels treat as "not in the
+    /// char set" exactly like -1. The [`Decoder`] maps codes back to residues
+    /// for the output alignment.
+    pub fn from_alignment(aln: &mut Alignment, char_set: &[u8]) -> (Self, Decoder) {
+        let mut lut = [0i8; 256];
+        let mut table = [0u8; 256];
+        for (i, &c) in char_set.iter().enumerate() {
+            lut[c as usize] = i as i8;
+            table[i] = c;
+        }
+        let mut next: i16 = -1;
+        for b in 0..=255u8 {
+            if aln.present[b as usize] && !char_set.contains(&b) {
+                assert!(next >= i8::MIN as i16, "too many distinct residues to encode");
+                lut[b as usize] = next as i8;
+                table[next as i8 as u8 as usize] = b;
+                next -= 1;
+            }
+        }
+        let (nrows, ncols) = (aln.nrows(), aln.ncols);
+        let mut bytes = std::mem::take(&mut aln.columns);
+        bytes.par_chunks_mut(1 << 20).for_each(|chunk| {
+            for v in chunk {
+                *v = lut[*v as usize] as u8;
+            }
+        });
+        // Same size and alignment: reinterpret the buffer as i8 without copying.
+        let mut bytes = std::mem::ManuallyDrop::new(bytes);
+        let codes = unsafe { Vec::from_raw_parts(bytes.as_mut_ptr() as *mut i8, bytes.len(), bytes.capacity()) };
+        (Encoded::from_codes(codes, nrows, ncols), Decoder { table })
+    }
+
+    /// Encode a row-major byte alignment against `char_set` (every byte outside
+    /// it becomes -1).
     pub fn from_rows(data: &[u8], nrows: usize, ncols: usize, char_set: &[u8]) -> Self {
         let lut = lookup_table(char_set);
         let mut codes = vec![-1i8; nrows * ncols];
@@ -33,11 +87,22 @@ impl Encoded {
                 codes[j * nrows + t] = lut[b as usize];
             }
         }
-        Encoded { nrows, ncols, codes, fortran: false }
+        Encoded::from_codes(codes, nrows, ncols)
     }
 
+    #[inline]
+    fn stored(&self, j: usize) -> usize {
+        match &self.active {
+            Some(a) => a[j] as usize,
+            None => j,
+        }
+    }
+
+    #[inline]
     pub fn column(&self, j: usize) -> &[i8] {
-        &self.codes[j * self.nrows..(j + 1) * self.nrows]
+        debug_assert!(j < self.ncols);
+        let s = self.stored(j);
+        &self.codes[s * self.nrows..(s + 1) * self.nrows]
     }
 
     /// Remove the given columns (any order; duplicates ignored), following
@@ -48,20 +113,34 @@ impl Encoded {
         out
     }
 
-    /// Remove columns; the result is a freshly encoded (C-ordered) alignment.
+    /// Remove columns; the result is C-ordered, like a freshly encoded alignment.
     pub fn delete_columns_raw(&self, cols: &[usize]) -> Encoded {
         let mut drop = vec![false; self.ncols];
         for &c in cols {
             drop[c] = true;
         }
-        let keep = drop.iter().filter(|d| !**d).count();
-        let mut codes = Vec::with_capacity(keep * self.nrows);
-        for j in 0..self.ncols {
-            if !drop[j] {
-                codes.extend_from_slice(self.column(j));
-            }
+        let active: Arc<[u32]> =
+            (0..self.ncols).filter(|&j| !drop[j]).map(|j| self.stored(j) as u32).collect();
+        Encoded {
+            nrows: self.nrows,
+            ncols: active.len(),
+            codes: Arc::clone(&self.codes),
+            active: Some(active),
+            fortran: false,
         }
-        Encoded { nrows: self.nrows, ncols: keep, codes, fortran: false }
+    }
+}
+
+/// Maps the codes of [`Encoded::from_alignment`] back to residues.
+#[derive(Clone, Debug)]
+pub struct Decoder {
+    table: [u8; 256],
+}
+
+impl Decoder {
+    #[inline]
+    pub fn byte(&self, code: i8) -> u8 {
+        self.table[code as u8 as usize]
     }
 }
 

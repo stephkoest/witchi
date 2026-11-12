@@ -82,10 +82,10 @@ pub struct Setup {
 
 fn setup(case: &Case) -> Setup {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(&case.input);
-    let aln = read_alignment(&path, &case.format).unwrap();
+    let mut aln = read_alignment(&path, &case.format).unwrap();
     let st = detect_sequence_type(&aln).unwrap();
     let cs = st.char_set();
-    Setup { enc: Encoded::from_rows(&aln.data, aln.nrows(), aln.ncols, cs), n_chars: cs.len() }
+    Setup { enc: Encoded::from_alignment(&mut aln, cs).0, n_chars: cs.len() }
 }
 
 #[test]
@@ -159,9 +159,9 @@ fn external_dump_matches_python() {
             (key, it.map(|h| f64::from_bits(u64::from_str_radix(h, 16).unwrap())).collect())
         })
         .collect();
-    let aln = read_alignment(Path::new(&input), &get("--format", "fasta")).unwrap();
+    let mut aln = read_alignment(Path::new(&input), &get("--format", "fasta")).unwrap();
     let cs = detect_sequence_type(&aln).unwrap().char_set();
-    let enc = Encoded::from_rows(&aln.data, aln.nrows(), aln.ncols, cs);
+    let enc = Encoded::from_alignment(&mut aln, cs).0;
     let st = NullState::new(NullMatrix::compute(&enc, cs.len(), perms));
     let z = ZParams::from_null(&st);
     let counts = chi2::fudge_counts(chi2::count_rows_raw(&enc, cs.len()));
