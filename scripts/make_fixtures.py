@@ -7,6 +7,8 @@ Writes:
   pyfmt_floats.tsv  hexbits, repr, .2f, .3f, .4f, .6f   (asserts str(np.float64) == repr)
   pyfmt_json.txt    json.dumps(indent=4) of a fixed structure (rebuilt in Rust tests)
   pyfmt_csv.txt     csv.writer(delimiter="\t") rows with awkward fields
+  rng_raw.txt       seed, first 9 PCG64 raw u64 outputs (hex)
+  rng_perm.txt      apply_along_axis(default_rng(seed).permutation, 0, A) for fixed A
 """
 
 import csv
@@ -83,6 +85,28 @@ def main():
     w.writerow(["x", ""])
     w.writerow(["'single'", "comma,ok", "ünï"])
     (out / "pyfmt_csv.txt").write_bytes(buf.getvalue().encode())
+    rng_fixtures(out)
+
+
+def rng_fixtures(out):
+    seeds = [0, 1, 12345, 12346, 12444, 12445, 12544, 2**32 - 1, 2**32, 2**40 + 7, 2**63 + 5]
+    with open(out / "rng_raw.txt", "w") as fh:
+        for seed in seeds:
+            raw = np.random.PCG64(seed).random_raw(9)
+            fh.write(" ".join([str(seed)] + [f"{int(v):016x}" for v in raw]) + "\n")
+    letters = np.array(list("ACDEFGHIKLMNPQRSTVWY-X"))
+    with open(out / "rng_perm.txt", "w") as fh:
+        for rows, cols in [(1, 3), (2, 5), (37, 11), (300, 4), (70000, 2)]:
+            rs = np.random.RandomState(rows * 1000 + cols)
+            a = letters[rs.randint(0, len(letters), size=(rows, cols))]
+            fh.write(f"shape {rows} {cols}\n")
+            for j in range(cols):
+                fh.write("".join(a[:, j]) + "\n")
+            for seed in (12345, 12346, 12345 + 100 + 7):
+                p = np.apply_along_axis(np.random.default_rng(seed).permutation, 0, a)
+                fh.write(f"seed {seed}\n")
+                for j in range(cols):
+                    fh.write("".join(p[:, j]) + "\n")
 
 
 if __name__ == "__main__":

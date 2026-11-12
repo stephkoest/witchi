@@ -168,6 +168,13 @@ Port literally, keeping every quirk:
   followed by a charset → `Unknown character identifier`) don't occur in Rust.
 - A zero-column alignment is an error, as in Python (numpy `TypeError`).
 
+## 5c. Phase 2 status (done)
+
+- `src/rng.rs`: SeedSequence → PCG64 (buffered u32) → `random_interval` → Fisher–Yates,
+  one generator per seed across all columns. `tests/rng.rs` checks raw draws for 11 seeds
+  (including > 2^32 entropy) and `apply_along_axis(permutation)` for 5 shapes up to
+  70000 × 2.
+
 ## 6. Decisions (agreed 2026-11-12)
 
 - **BLAS**: both backends. The OpenBLAS FFI backend is the default and gives exact parity.
