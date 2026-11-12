@@ -1,0 +1,21 @@
+witchi 0.2.0
+Detected DNA sequence.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Alignment chi2score: 115.64 | Permutations alignment chi2scores: 17.01 - 30.49 | Empirical-P: 0.0
+Alignment mean taxa chi2score: 9.64 | Permutations mean taxa chi2score: 1.99 | Alignment Z-score: 19.78
+Biased Taxa based on corrected empirical-P-values: 4 of 12
+Taxa z-scores and empirical p-values:
+deg3	24.29	0.0000
+deg1	9.04	0.0000
+deg11	8.10	0.0000
+deg0	7.79	0.0000
+deg2	4.85	0.0500
+deg9	3.78	0.3500
+deg4	3.32	0.4500
+deg8	2.42	0.7500
+deg6	1.81	1.0000
+deg10	0.60	1.0000
+deg7	0.50	1.0000
+deg5	-0.87	1.0000
+Execution time for testing: 0.06 seconds

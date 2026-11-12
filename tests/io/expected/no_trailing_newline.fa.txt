@@ -1,0 +1,5 @@
+OK protein
+>a
+MKVL
+>b
+MKAL

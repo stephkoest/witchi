@@ -1,0 +1,29 @@
+witchi 0.2.0
+Detected amino acid sequence.
+Running 20 permutations.
+Using 1 worker(s) for permutation
+Alignment chi2score: 214.04 | Permutations alignment chi2scores: 169.06 - 217.91 | Empirical-P: 0.05
+Alignment mean taxa chi2score: 10.70 | Permutations mean taxa chi2score: 9.36 | Alignment Z-score: 1.75
+Biased Taxa based on corrected empirical-P-values: 0 of 20
+Taxa z-scores and empirical p-values:
+G000247545	4.08	0.1000
+G000309865	2.75	0.2000
+G000387965	2.14	0.8000
+G000270325	1.65	1.0000
+G000224475	1.43	1.0000
+G000336955	1.27	1.0000
+G000230955	1.20	1.0000
+G000337115	0.73	1.0000
+G000145985	0.63	1.0000
+G000008085	0.01	1.0000
+G000200715	-0.06	1.0000
+G000220375	-0.18	1.0000
+G000389735	-0.41	1.0000
+G000204585	-0.52	1.0000
+G000350305	-0.60	1.0000
+G000375685	-0.68	1.0000
+G000306725	-0.92	1.0000
+G000380705	-0.93	1.0000
+G000246735	-1.12	1.0000
+G000166095	-1.17	1.0000
+Execution time for testing: 0.08 seconds

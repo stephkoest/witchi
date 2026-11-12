@@ -1,0 +1,5 @@
+OK dna
+>a
+ACGTAC
+>b
+TTGGCA

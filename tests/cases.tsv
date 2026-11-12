@@ -1,0 +1,42 @@
+# Golden-test scenarios for `witchi prune`.
+# Columns (tab-separated): name  input (relative to the manifest's data dir)  extra args
+# References live in tests/golden/<name>/ and are produced by scripts/make_golden.sh
+# from the Python reference implementation (conda env witchi-0.2.0).
+#
+# Goals of the matrix: all three algorithms; delta-null on/off; top_n 1 / 5 / 20
+# (touchdown rollback needs top_n > max(1, top_n//10)); --max_residue_pruned cap
+# hit vs natural stop; null recompute; K = min(200, P*T) < 200; b == 1 blocks;
+# degenerate-column fallback; FASTA parsing quirks; NEXUS input; DNA input.
+n20_sq_t1	gtdb_n20_c100.faa	--pruning_algorithm squared --top_n 1 --permutations 20 --max_residue_pruned 100
+n20_qu_t1	gtdb_n20_c100.faa	--pruning_algorithm quartic --top_n 1 --permutations 20 --max_residue_pruned 100
+n20_wa_t1	gtdb_n20_c100.faa	--pruning_algorithm wasserstein --top_n 1 --permutations 20 --max_residue_pruned 100
+n50_sq_t1	gtdb_n50_c500.faa	--pruning_algorithm squared --top_n 1 --permutations 50 --max_residue_pruned 500
+n50_qu_t1	gtdb_n50_c500.faa	--pruning_algorithm quartic --top_n 1 --permutations 50 --max_residue_pruned 500
+n50_wa_t1	gtdb_n50_c500.faa	--pruning_algorithm wasserstein --top_n 1 --permutations 50 --max_residue_pruned 500
+n50_sq_t20	gtdb_n50_c500.faa	--pruning_algorithm squared --top_n 20 --permutations 50 --max_residue_pruned 500
+n50_qu_t20	gtdb_n50_c500.faa	--pruning_algorithm quartic --top_n 20 --permutations 50 --max_residue_pruned 500
+n50_wa_t20	gtdb_n50_c500.faa	--pruning_algorithm wasserstein --top_n 20 --permutations 50 --max_residue_pruned 500
+n50_sq_t5_nodn	gtdb_n50_c500.faa	--pruning_algorithm squared --top_n 5 --permutations 50 --max_residue_pruned 500 --no-delta-null
+n50_qu_t5_nodn	gtdb_n50_c500.faa	--pruning_algorithm quartic --top_n 5 --permutations 50 --max_residue_pruned 500 --no-delta-null
+n50_wa_t5_nodn	gtdb_n50_c500.faa	--pruning_algorithm wasserstein --top_n 5 --permutations 50 --max_residue_pruned 500 --no-delta-null
+n50_wa_t5_cap	gtdb_n50_c500.faa	--pruning_algorithm wasserstein --top_n 5 --permutations 50 --max_residue_pruned 23
+n100_sq_t10	gtdb_n100_c1000.faa	--pruning_algorithm squared --top_n 10 --permutations 100 --max_residue_pruned 1000
+n100_qu_t10	gtdb_n100_c1000.faa	--pruning_algorithm quartic --top_n 10 --permutations 100 --max_residue_pruned 1000
+n100_wa_t10	gtdb_n100_c1000.faa	--pruning_algorithm wasserstein --top_n 10 --permutations 100 --max_residue_pruned 1000
+n100_wa_t1_def	gtdb_n100_c1000.faa
+c257_sq_t1	gtdb_n50_c257.faa	--pruning_algorithm squared --top_n 1 --permutations 30 --max_residue_pruned 257
+c257_wa_t4	gtdb_n50_c257.faa	--pruning_algorithm wasserstein --top_n 4 --permutations 30 --max_residue_pruned 257
+quirks_wa_t2	gtdb_quirks.faa	--pruning_algorithm wasserstein --top_n 2 --permutations 40 --max_residue_pruned 400
+quirks_qu_t20_nodn	gtdb_quirks.faa	--pruning_algorithm quartic --top_n 20 --permutations 40 --max_residue_pruned 400 --no-delta-null
+dna_sq_t1	dna_n30_c300.fasta	--pruning_algorithm squared --top_n 1 --permutations 50 --max_residue_pruned 300
+dna_wa_t20	dna_n30_c300.fasta	--pruning_algorithm wasserstein --top_n 20 --permutations 50 --max_residue_pruned 300
+dna_qu_t5_nodn	dna_n30_c300.fasta	--pruning_algorithm quartic --top_n 5 --permutations 50 --max_residue_pruned 300 --no-delta-null
+deg_sq_t1	dna_degenerate.fasta	--pruning_algorithm squared --top_n 1 --permutations 20 --max_residue_pruned 60
+deg_qu_t1_nodn	dna_degenerate.fasta	--pruning_algorithm quartic --top_n 1 --permutations 20 --max_residue_pruned 60 --no-delta-null
+deg_wa_t2	dna_degenerate.fasta	--pruning_algorithm wasserstein --top_n 2 --permutations 20 --max_residue_pruned 60
+nex_sq_t1	example.nex	--format nexus --pruning_algorithm squared --top_n 1 --permutations 20 --max_residue_pruned 300
+nex_wa_t10	example.nex	--format nexus --pruning_algorithm wasserstein --top_n 10 --permutations 20 --max_residue_pruned 300
+n150_sq_t5	gtdb_n150_c600.faa	--pruning_algorithm squared --top_n 5 --permutations 30 --max_residue_pruned 600
+n150_qu_t20	gtdb_n150_c600.faa	--pruning_algorithm quartic --top_n 20 --permutations 30 --max_residue_pruned 600
+n150_qu_t3_nodn	gtdb_n150_c600.faa	--pruning_algorithm quartic --top_n 3 --permutations 30 --max_residue_pruned 600 --no-delta-null
+n150_wa_t8	gtdb_n150_c600.faa	--pruning_algorithm wasserstein --top_n 8 --permutations 30 --max_residue_pruned 600

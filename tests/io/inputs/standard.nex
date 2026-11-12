@@ -1,0 +1,5 @@
+#NEXUS
+begin data; dimensions ntax=2 nchar=3; format datatype=standard symbols="01"; matrix
+a 010
+b 110
+; end;

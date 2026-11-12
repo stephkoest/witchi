@@ -1,0 +1,11 @@
+# Golden scenarios for `witchi test` (refs: scripts/make_golden.sh --test).
+# For `test`, stdout is the primary output and is compared (minus the timing line).
+t_n20	gtdb_n20_c100.faa	--permutations 20
+t_n50_out	gtdb_n50_c500.faa	--permutations 50 --create_output
+t_n100	gtdb_n100_c1000.faa	--permutations 100 --num_workers_permute 4
+t_n100_out	gtdb_n100_c1000.faa	--permutations 100 --create_output
+t_dna_out	dna_n30_c300.fasta	--permutations 30 --create_output
+t_deg	dna_degenerate.fasta	--permutations 20
+t_quirks_out	gtdb_quirks.faa	--permutations 25 --create_output
+t_nex_out	example.nex	--format nexus --permutations 10 --create_output
+t_n150	gtdb_n150_c600.faa	--permutations 7
